@@ -90,6 +90,7 @@ export const studentsAPI = {
   addRemark: (id, data) => api.post(`/students/${id}/remarks`, data),
   approveStudent: (id, data) => api.put(`/students/${id}/approve`, data),
   getStats: () => api.get('/students/stats/overview'),
+  getMyPerformance: () => api.get('/students/me/performance'),
 }
 
 // Jobs API
@@ -113,7 +114,13 @@ export const trainersAPI = {
   getTrainerAnalytics: (trainerId) => api.get(`/trainers/${trainerId}/analytics`),
   getPendingStudents: () => api.get('/trainers/me/students/pending'),
   updateStudentApproval: (studentProfileId, status) =>
-    api.put(`/trainers/me/students/${studentProfileId}/approval`, { status })
+    api.put(`/trainers/me/students/${studentProfileId}/approval`, { status }),
+  getStudentEvaluations: (studentProfileId, params) =>
+    api.get(`/trainers/me/students/${studentProfileId}/evaluations`, { params }),
+  recordEvaluation: (studentProfileId, data) =>
+    api.post(`/trainers/me/students/${studentProfileId}/evaluations`, data),
+  updateEvaluation: (evaluationId, data) =>
+    api.put(`/trainers/me/evaluations/${evaluationId}`, data),
 }
 
 // Notifications API

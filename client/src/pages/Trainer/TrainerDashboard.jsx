@@ -156,20 +156,6 @@ const TrainerDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <AcademicCapIcon className="h-8 w-8 text-success-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Approved Students</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {stats?.approvedStudents || 0}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
               <ChartBarIcon className="h-8 w-8 text-indigo-600" />
             </div>
             <div className="ml-4">
@@ -393,7 +379,7 @@ const TrainerDashboard = () => {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Link to="/students" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+        <Link to="/evaluations" className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
           <div className="flex items-center">
             <UserGroupIcon className="h-8 w-8 text-primary-600" />
             <div className="ml-4">

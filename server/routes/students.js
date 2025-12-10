@@ -2,9 +2,11 @@ const express = require('express');
 const Joi = require('joi');
 const StudentProfile = require('../models/StudentProfile');
 const TrainerEvaluation = require('../models/TrainerEvaluation');
+const StudentEvaluation = require('../models/StudentEvaluation');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { authenticate, authorize } = require('../middleware/auth');
+const { evaluationTypeOptions } = require('../utils/evaluationUtils');
 
 const router = express.Router();
 
@@ -47,6 +49,58 @@ const addRemarkSchema = Joi.object({
 const approveStudentSchema = Joi.object({
   approved: Joi.boolean().required(),
   remarks: Joi.string().trim().optional()
+});
+
+/**
+ * @route   GET /api/v1/students/me/performance
+ * @desc    Get evaluations for the logged-in student
+ * @access  Private (Students only)
+ */
+router.get('/me/performance', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const studentProfile = await StudentProfile.findOne({ userId: req.user._id })
+      .populate('trainerId', 'name email');
+
+    if (!studentProfile) {
+      return res.status(404).json({
+        success: false,
+        error: 'Student profile not found'
+      });
+    }
+
+    const evaluations = await StudentEvaluation.find({ studentUserId: req.user._id })
+      .sort({ periodStart: -1, createdAt: -1 })
+      .select('-__v');
+
+    const groupedByType = evaluationTypeOptions.reduce((acc, type) => {
+      acc[type] = evaluations.filter(evaluation => evaluation.type === type);
+      return acc;
+    }, {});
+
+    const latestByType = evaluationTypeOptions.reduce((acc, type) => {
+      if (groupedByType[type]?.length) {
+        acc[type] = groupedByType[type][0];
+      }
+      return acc;
+    }, {});
+
+    const weeklyEvaluations = evaluations.filter(evaluation => evaluation.frequency === 'weekly');
+    const monthlyEvaluations = evaluations.filter(evaluation => evaluation.frequency === 'monthly');
+
+    res.json({
+      success: true,
+      data: {
+        studentProfile,
+        evaluations,
+        groupedByType,
+        latestByType,
+        weeklyEvaluations,
+        monthlyEvaluations
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 /**

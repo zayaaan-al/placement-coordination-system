@@ -21,6 +21,7 @@ import TrainerDashboard from './pages/Trainer/TrainerDashboard'
 import StudentList from './pages/Trainer/StudentList'
 import StudentDetail from './pages/Trainer/StudentDetail'
 import TrainerAnalytics from './pages/Trainer/TrainerAnalytics'
+import TrainerEvaluation from './pages/Trainer/TrainerEvaluation'
 
 // Coordinator pages
 import CoordinatorDashboard from './pages/Coordinator/CoordinatorDashboard'
@@ -93,6 +94,11 @@ function App() {
           <Route path="analytics" element={
             <ProtectedRoute allowedRoles={['trainer', 'coordinator']}>
               <TrainerAnalytics />
+            </ProtectedRoute>
+          } />
+          <Route path="evaluations" element={
+            <ProtectedRoute allowedRoles={['trainer']}>
+              <TrainerEvaluation />
             </ProtectedRoute>
           } />
 

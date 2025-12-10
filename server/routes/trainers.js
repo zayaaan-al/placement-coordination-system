@@ -1,10 +1,223 @@
 const express = require('express');
+const Joi = require('joi');
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
 const TrainerEvaluation = require('../models/TrainerEvaluation');
+const StudentEvaluation = require('../models/StudentEvaluation');
+const { getPeriodMetadata, getTypeConfig } = require('../utils/evaluationUtils');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
+
+const evaluationTypeOptions = ['aptitude', 'logical', 'machine', 'spring_meet'];
+
+const createEvaluationSchema = Joi.object({
+  type: Joi.string().valid(...evaluationTypeOptions).required(),
+  recordedDate: Joi.date().optional(),
+  score: Joi.number().min(0).required(),
+  maxScore: Joi.number().min(1).optional(),
+  notes: Joi.string().trim().allow('', null).max(500).optional()
+});
+
+const updateEvaluationSchema = Joi.object({
+  recordedDate: Joi.date().optional(),
+  score: Joi.number().min(0).optional(),
+  maxScore: Joi.number().min(1).optional(),
+  notes: Joi.string().trim().allow('', null).max(500).optional()
+}).min(1);
+
+const ensureStudentAssignment = async (studentProfileId, trainerId) => {
+  const studentProfile = await StudentProfile.findOne({
+    _id: studentProfileId,
+    trainerId,
+    approvalStatus: 'approved'
+  });
+  return studentProfile;
+};
+
+router.get('/me/students/:studentProfileId/evaluations', authenticate, authorize('trainer'), async (req, res, next) => {
+  try {
+    const { studentProfileId } = req.params;
+    const { type } = req.query;
+
+    const studentProfile = await ensureStudentAssignment(studentProfileId, req.user._id);
+
+    if (!studentProfile) {
+      return res.status(404).json({
+        success: false,
+        error: 'Student not found or not assigned to you'
+      });
+    }
+
+    const query = {
+      studentProfileId: studentProfile._id
+    };
+
+    if (type) {
+      if (!evaluationTypeOptions.includes(type)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid evaluation type filter'
+        });
+      }
+      query.type = type;
+    }
+
+    const evaluations = await StudentEvaluation.find(query)
+      .sort({ periodStart: -1, createdAt: -1 })
+      .select('-__v');
+
+    res.json({
+      success: true,
+      data: evaluations
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/me/students/:studentProfileId/evaluations', authenticate, authorize('trainer'), async (req, res, next) => {
+  try {
+    const { error, value } = createEvaluationSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: error.details.map(detail => detail.message)
+      });
+    }
+
+    const { studentProfileId } = req.params;
+    const studentProfile = await ensureStudentAssignment(studentProfileId, req.user._id);
+
+    if (!studentProfile) {
+      return res.status(404).json({
+        success: false,
+        error: 'Student not found or not assigned to you'
+      });
+    }
+
+    const recordedDate = value.recordedDate ? new Date(value.recordedDate) : new Date();
+    const config = getTypeConfig(value.type);
+    const maxScore = value.maxScore || config.defaultMax;
+
+    if (value.type === 'aptitude' && maxScore !== 25) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aptitude test must be out of 25 marks'
+      });
+    }
+
+    if (value.score > maxScore) {
+      return res.status(400).json({
+        success: false,
+        error: 'Score cannot exceed maximum score'
+      });
+    }
+
+    const { periodStart, periodEnd, periodLabel } = getPeriodMetadata(value.type, recordedDate);
+
+    const filter = {
+      studentProfileId: studentProfile._id,
+      type: value.type,
+      periodStart
+    };
+
+    const update = {
+      studentProfileId: studentProfile._id,
+      studentUserId: studentProfile.userId,
+      trainerId: req.user._id,
+      type: value.type,
+      frequency: config.frequency,
+      recordedDate,
+      periodStart,
+      periodEnd,
+      periodLabel,
+      score: value.score,
+      maxScore,
+      notes: value.notes,
+      lastUpdatedBy: req.user._id
+    };
+
+    const evaluation = await StudentEvaluation.findOneAndUpdate(
+      filter,
+      { $set: update },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Evaluation recorded successfully',
+      data: evaluation
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/me/evaluations/:evaluationId', authenticate, authorize('trainer'), async (req, res, next) => {
+  try {
+    const { error, value } = updateEvaluationSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: error.details.map(detail => detail.message)
+      });
+    }
+
+    const evaluation = await StudentEvaluation.findById(req.params.evaluationId);
+
+    if (!evaluation || evaluation.trainerId.toString() !== req.user._id.toString()) {
+      return res.status(404).json({
+        success: false,
+        error: 'Evaluation not found'
+      });
+    }
+
+    if (value.score !== undefined) {
+      const maxScore = value.maxScore || evaluation.maxScore;
+      if (value.score > maxScore) {
+        return res.status(400).json({
+          success: false,
+          error: 'Score cannot exceed maximum score'
+        });
+      }
+    }
+
+    if (evaluation.type === 'aptitude' && value.maxScore !== undefined && value.maxScore !== 25) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aptitude test must be out of 25 marks'
+      });
+    }
+
+    if (value.recordedDate) {
+      const recordedDate = new Date(value.recordedDate);
+      const { periodStart, periodEnd, periodLabel } = getPeriodMetadata(evaluation.type, recordedDate);
+
+      evaluation.recordedDate = recordedDate;
+      evaluation.periodStart = periodStart;
+      evaluation.periodEnd = periodEnd;
+      evaluation.periodLabel = periodLabel;
+    }
+
+    if (value.score !== undefined) evaluation.score = value.score;
+    if (value.maxScore !== undefined) evaluation.maxScore = value.maxScore;
+    if (value.notes !== undefined) evaluation.notes = value.notes;
+    evaluation.lastUpdatedBy = req.user._id;
+
+    await evaluation.save();
+
+    res.json({
+      success: true,
+      message: 'Evaluation updated successfully',
+      data: evaluation
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * @route   GET /api/v1/trainers/me/students/pending
