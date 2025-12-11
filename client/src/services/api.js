@@ -91,6 +91,8 @@ export const studentsAPI = {
   approveStudent: (id, data) => api.put(`/students/${id}/approve`, data),
   getStats: () => api.get('/students/stats/overview'),
   getMyPerformance: () => api.get('/students/me/performance'),
+  getMyPerformanceLatest: () => api.get('/students/me/performance/latest'),
+  getMyPerformanceAlerts: (params) => api.get('/students/me/performance/alerts', { params }),
 }
 
 // Jobs API

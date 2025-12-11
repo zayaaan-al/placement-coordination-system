@@ -29,6 +29,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
       student: [
         { name: 'My Profile', href: '/profile', icon: UserIcon },
         { name: 'Job Opportunities', href: '/jobs', icon: BriefcaseIcon },
+        { name: 'Performance', href: '/students/performance', icon: ChartBarIcon },
       ],
       trainer: [
         { name: 'Students', href: '/students', icon: UserGroupIcon },

@@ -7,6 +7,9 @@ const mongoose = require('mongoose');
 // Test database
 const MONGODB_URI = process.env.MONGO_URI_TEST || 'mongodb://localhost:27017/placementdb_test';
 
+// Explicit weights mirroring MatchingService.DEFAULT_WEIGHTS to avoid relying on static class properties
+const TEST_WEIGHTS = { skills: 0.6, tests: 0.25, trainer: 0.15 };
+
 describe('Matching Service', () => {
   let testStudent, testJob, testUser;
 
@@ -85,7 +88,7 @@ describe('Matching Service', () => {
       const result = matchingService.calculateMatchScore(
         studentData,
         jobData,
-        matchingService.DEFAULT_WEIGHTS,
+        TEST_WEIGHTS,
         true
       );
 
@@ -110,7 +113,7 @@ describe('Matching Service', () => {
       const result = matchingService.calculateMatchScore(
         poorStudent,
         testJob.toObject(),
-        matchingService.DEFAULT_WEIGHTS
+        TEST_WEIGHTS
       );
 
       expect(result.totalScore).toBeLessThan(50);
@@ -126,7 +129,7 @@ describe('Matching Service', () => {
       const result = matchingService.calculateMatchScore(
         noSkillsStudent,
         testJob.toObject(),
-        matchingService.DEFAULT_WEIGHTS
+        TEST_WEIGHTS
       );
 
       expect(result.totalScore).toBeGreaterThanOrEqual(0);
@@ -225,7 +228,7 @@ describe('Matching Service', () => {
     });
 
     it('should respect limit parameter', async () => {
-      // Create multiple students
+      // Create multiple students with unique roll numbers that do not collide with existing fixtures
       for (let i = 0; i < 5; i++) {
         const user = await User.create({
           name: { first: `Student${i}`, last: 'Test' },
@@ -236,7 +239,7 @@ describe('Matching Service', () => {
 
         await StudentProfile.create({
           userId: user._id,
-          rollNo: `STU00${i}`,
+          rollNo: `STUX${i}`,
           program: 'Computer Science',
           batch: '2024',
           skills: [

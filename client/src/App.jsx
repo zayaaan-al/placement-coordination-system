@@ -13,6 +13,7 @@ import RegisterPage from './pages/Auth/RegisterPage'
 // Student pages
 import StudentDashboard from './pages/Student/StudentDashboard'
 import StudentProfile from './pages/Student/StudentProfile'
+import MyPerformance from './pages/Student/MyPerformance'
 import JobMatches from './pages/Student/JobMatches'
 import JobDetails from './pages/Student/JobDetails'
 
@@ -67,6 +68,11 @@ function App() {
           <Route path="profile" element={
             <ProtectedRoute allowedRoles={['student']}>
               <StudentProfile />
+            </ProtectedRoute>
+          } />
+          <Route path="students/performance" element={
+            <ProtectedRoute allowedRoles={['student']}>
+              <MyPerformance />
             </ProtectedRoute>
           } />
           <Route path="jobs" element={

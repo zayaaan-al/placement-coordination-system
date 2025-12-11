@@ -1,10 +1,8 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
-const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -75,17 +73,6 @@ async function ensureAdminCoordinator() {
   }
 }
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/placementdb', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(async () => {
-  console.log('MongoDB connected');
-  await ensureAdminCoordinator();
-})
-.catch(err => console.error('MongoDB connection error:', err));
-
 // Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
@@ -108,9 +95,7 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-module.exports = app;
+module.exports = {
+  app,
+  ensureAdminCoordinator,
+};

@@ -1,8 +1,9 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
-const app = require('../index');
+const { app } = require('../index');
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
+const authService = require('../services/authService');
 
 // Test database
 const MONGODB_URI = process.env.MONGO_URI_TEST || 'mongodb://localhost:27017/placementdb_test';
@@ -118,7 +119,7 @@ describe('Authentication Endpoints', () => {
     let testUser;
 
     beforeEach(async () => {
-      // Create a test user
+      // Register a student through the actual auth route, then approve the created profile
       const userData = {
         name: { first: 'John', last: 'Doe' },
         email: 'john.doe@test.com',
@@ -126,14 +127,21 @@ describe('Authentication Endpoints', () => {
         role: 'student',
         rollNo: 'STU001',
         program: 'Computer Science',
-        batch: '2024'
+        batch: '2024',
       };
 
       const response = await request(app)
         .post('/api/v1/auth/register')
-        .send(userData);
+        .send(userData)
+        .expect(201);
 
       testUser = response.body.data.user;
+
+      const studentProfile = await StudentProfile.findOne({ userId: testUser._id });
+      if (studentProfile) {
+        studentProfile.approvalStatus = 'approved';
+        await studentProfile.save();
+      }
     });
 
     it('should login successfully with valid credentials', async () => {
@@ -186,24 +194,29 @@ describe('Authentication Endpoints', () => {
 
   describe('GET /api/v1/auth/me', () => {
     let accessToken;
+    let fixtureEmail;
 
     beforeEach(async () => {
-      // Register and login a user
-      const userData = {
+      // Create an approved student user directly and generate a JWT via authService
+      const uniqueSuffix = Date.now();
+      fixtureEmail = `john.doe+${uniqueSuffix}@test.com`;
+
+      const user = await User.create({
         name: { first: 'John', last: 'Doe' },
-        email: 'john.doe@test.com',
-        password: 'password123',
+        email: fixtureEmail,
+        passwordHash: 'password123',
         role: 'student',
+      });
+
+      await StudentProfile.create({
+        userId: user._id,
         rollNo: 'STU001',
         program: 'Computer Science',
-        batch: '2024'
-      };
+        batch: '2024',
+        approvalStatus: 'approved',
+      });
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(userData);
-
-      accessToken = response.body.data.accessToken;
+      accessToken = authService.generateAccessToken(user._id);
     });
 
     it('should return user profile with valid token', async () => {
@@ -213,7 +226,7 @@ describe('Authentication Endpoints', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data.email).toBe('john.doe@test.com');
+      expect(response.body.data.email).toBe(fixtureEmail);
       expect(response.body.data.role).toBe('student');
       expect(response.body.data.studentProfile).toBeDefined();
     });

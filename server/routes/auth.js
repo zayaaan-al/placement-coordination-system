@@ -93,6 +93,13 @@ router.post('/register', registrationLimiter, async (req, res, next) => {
 
     res.status(201).json(response);
   } catch (error) {
+    if (error.message === 'User with this email already exists') {
+      return res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+
     next(error);
   }
 });

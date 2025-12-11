@@ -23,9 +23,15 @@ class AuthService {
    * @returns {string} Refresh token
    */
   generateRefreshToken(userId) {
+    const secret = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET;
+
+    if (!secret) {
+      throw new Error('Refresh token secret is not configured');
+    }
+
     return jwt.sign(
       { userId, type: 'refresh' },
-      process.env.REFRESH_TOKEN_SECRET,
+      secret,
       { expiresIn: '7d' }
     );
   }

@@ -53,7 +53,7 @@ const approveStudentSchema = Joi.object({
 
 /**
  * @route   GET /api/v1/students/me/performance
- * @desc    Get evaluations for the logged-in student
+ * @desc    Get evaluations for the logged-in student (grouped by year/month)
  * @access  Private (Students only)
  */
 router.get('/me/performance', authenticate, authorize(['student']), async (req, res, next) => {
@@ -87,6 +87,112 @@ router.get('/me/performance', authenticate, authorize(['student']), async (req, 
     const weeklyEvaluations = evaluations.filter(evaluation => evaluation.frequency === 'weekly');
     const monthlyEvaluations = evaluations.filter(evaluation => evaluation.frequency === 'monthly');
 
+    // Group evaluations by year -> month for easier client consumption
+    const groupedByYearMonth = {};
+
+    evaluations.forEach((evaluation) => {
+      const periodStart = evaluation.periodStart || evaluation.recordedDate || evaluation.createdAt;
+      if (!periodStart) return;
+
+      const date = new Date(periodStart);
+      const year = date.getUTCFullYear();
+      const monthIndex = date.getUTCMonth(); // 0-based
+      const monthKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+
+      if (!groupedByYearMonth[year]) {
+        groupedByYearMonth[year] = {
+          year,
+          months: {}
+        };
+      }
+
+      if (!groupedByYearMonth[year].months[monthKey]) {
+        groupedByYearMonth[year].months[monthKey] = {
+          monthKey,
+          monthIndex,
+          label: date.toLocaleString('default', { month: 'long', year: 'numeric' }),
+          weeklyEntries: [],
+          springMeet: null,
+          stats: {
+            averagePercentage: null,
+            perTypeAverages: {},
+            lastUpdated: null
+          }
+        };
+      }
+
+      const monthBucket = groupedByYearMonth[year].months[monthKey];
+
+      const isSpringMeet = evaluation.type === 'spring_meet';
+      const percentage = evaluation.maxScore
+        ? (evaluation.score / evaluation.maxScore) * 100
+        : null;
+
+      const baseEntry = {
+        _id: evaluation._id,
+        type: evaluation.type,
+        frequency: evaluation.frequency,
+        score: evaluation.score,
+        maxScore: evaluation.maxScore,
+        periodLabel: evaluation.periodLabel,
+        periodStart: evaluation.periodStart,
+        periodEnd: evaluation.periodEnd,
+        recordedDate: evaluation.recordedDate,
+        percentage,
+        notes: evaluation.notes,
+        updatedAt: evaluation.updatedAt
+      };
+
+      if (isSpringMeet) {
+        monthBucket.springMeet = baseEntry;
+      } else if (evaluation.frequency === 'weekly') {
+        monthBucket.weeklyEntries.push(baseEntry);
+      }
+
+      // Track stats
+      const currentLastUpdated = monthBucket.stats.lastUpdated
+        ? new Date(monthBucket.stats.lastUpdated)
+        : null;
+      if (!currentLastUpdated || new Date(evaluation.updatedAt) > currentLastUpdated) {
+        monthBucket.stats.lastUpdated = evaluation.updatedAt;
+      }
+
+      if (percentage !== null) {
+        if (!monthBucket.stats._rawValues) {
+          monthBucket.stats._rawValues = [];
+        }
+        monthBucket.stats._rawValues.push({ type: evaluation.type, percentage });
+      }
+    });
+
+    // Finalize stats (average and per-type averages)
+    Object.values(groupedByYearMonth).forEach((yearBucket) => {
+      Object.values(yearBucket.months).forEach((monthBucket) => {
+        const rawValues = monthBucket.stats._rawValues || [];
+        if (rawValues.length) {
+          const total = rawValues.reduce((sum, item) => sum + item.percentage, 0);
+          monthBucket.stats.averagePercentage = total / rawValues.length;
+
+          const byType = rawValues.reduce((acc, item) => {
+            if (!acc[item.type]) {
+              acc[item.type] = { total: 0, count: 0 };
+            }
+            acc[item.type].total += item.percentage;
+            acc[item.type].count += 1;
+            return acc;
+          }, {});
+
+          monthBucket.stats.perTypeAverages = Object.keys(byType).reduce((acc, type) => {
+            const { total, count } = byType[type];
+            acc[type] = total / count;
+            return acc;
+          }, {});
+        }
+
+        delete monthBucket.stats._rawValues;
+      });
+    });
+
     res.json({
       success: true,
       data: {
@@ -95,7 +201,143 @@ router.get('/me/performance', authenticate, authorize(['student']), async (req, 
         groupedByType,
         latestByType,
         weeklyEvaluations,
-        monthlyEvaluations
+        monthlyEvaluations,
+        groupedByYearMonth
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/v1/students/me/performance/latest
+ * @desc    Get latest hero performance metrics for the logged-in student
+ * @access  Private (Students only)
+ */
+router.get('/me/performance/latest', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const evaluations = await StudentEvaluation.find({ studentUserId: req.user._id })
+      .sort({ periodStart: -1, createdAt: -1 })
+      .select('-__v');
+
+    if (!evaluations.length) {
+      return res.json({
+        success: true,
+        data: null
+      });
+    }
+
+    // Use the most recent evaluation's month as the current period
+    const latestEval = evaluations[0];
+    const baseDate = latestEval.periodStart || latestEval.recordedDate || latestEval.createdAt;
+    const base = new Date(baseDate);
+    const targetYear = base.getUTCFullYear();
+    const targetMonth = base.getUTCMonth();
+
+    const inLatestMonth = evaluations.filter((evaluation) => {
+      const d = new Date(evaluation.periodStart || evaluation.recordedDate || evaluation.createdAt);
+      return d.getUTCFullYear() === targetYear && d.getUTCMonth() === targetMonth;
+    });
+
+    let totalPercentage = 0;
+    let count = 0;
+    const perType = {};
+    let springMeet = null;
+    let lastUpdated = null;
+
+    inLatestMonth.forEach((evaluation) => {
+      const percentage = evaluation.maxScore
+        ? (evaluation.score / evaluation.maxScore) * 100
+        : null;
+
+      if (percentage !== null) {
+        totalPercentage += percentage;
+        count += 1;
+
+        if (!perType[evaluation.type]) {
+          perType[evaluation.type] = { total: 0, count: 0 };
+        }
+        perType[evaluation.type].total += percentage;
+        perType[evaluation.type].count += 1;
+      }
+
+      if (!lastUpdated || new Date(evaluation.updatedAt) > lastUpdated) {
+        lastUpdated = new Date(evaluation.updatedAt);
+      }
+
+      if (evaluation.type === 'spring_meet') {
+        springMeet = {
+          score: evaluation.score,
+          maxScore: evaluation.maxScore,
+          percentage,
+          periodLabel: evaluation.periodLabel,
+          recordedDate: evaluation.recordedDate
+        };
+      }
+    });
+
+    const averagePercentage = count ? totalPercentage / count : null;
+    const perTypeAverages = Object.keys(perType).reduce((acc, type) => {
+      const { total, count: c } = perType[type];
+      acc[type] = c ? total / c : null;
+      return acc;
+    }, {});
+
+    const hasSpringMeet = !!springMeet;
+    const status = hasSpringMeet ? 'COMPLETED' : 'IN_PROGRESS';
+
+    res.json({
+      success: true,
+      data: {
+        period: {
+          year: targetYear,
+          monthIndex: targetMonth,
+          label: base.toLocaleString('default', { month: 'long', year: 'numeric' })
+        },
+        averagePercentage,
+        perTypeAverages,
+        springMeet,
+        status,
+        lastUpdated
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/v1/students/me/performance/alerts
+ * @desc    Lightweight polling endpoint to detect recent evaluation updates
+ * @access  Private (Students only)
+ */
+router.get('/me/performance/alerts', authenticate, authorize(['student']), async (req, res, next) => {
+  try {
+    const { since } = req.query;
+
+    const baseFilter = { studentUserId: req.user._id };
+    let hasUpdates = false;
+
+    if (since) {
+      const sinceDate = new Date(since);
+      if (!Number.isNaN(sinceDate.getTime())) {
+        hasUpdates = !!(await StudentEvaluation.exists({
+          ...baseFilter,
+          updatedAt: { $gt: sinceDate }
+        }));
+      }
+    }
+
+    const latest = await StudentEvaluation.findOne(baseFilter)
+      .sort({ updatedAt: -1 })
+      .select('updatedAt');
+
+    res.json({
+      success: true,
+      data: {
+        hasUpdates,
+        lastUpdated: latest ? latest.updatedAt : null
       }
     });
   } catch (error) {

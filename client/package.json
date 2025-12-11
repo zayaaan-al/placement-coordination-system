@@ -11,6 +11,7 @@
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
     "framer-motion": "^12.23.25",
+    "lucide-react": "^0.452.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.47.0",
@@ -33,6 +34,10 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "babel-jest": "^29.7.0",
+    "@babel/core": "^7.22.0",
+    "@babel/preset-env": "^7.22.0",
+    "@babel/preset-react": "^7.22.0",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.18",
     "vite": "^5.4.21"
@@ -65,6 +70,17 @@
     ],
     "moduleNameMapping": {
       "\\.(css|less|scss|sass)$": "identity-obj-proxy"
+    },
+    "transform": {
+      "^.+\\.[jt]sx?$": "babel-jest"
+    },
+    "coverageThreshold": {
+      "global": {
+        "branches": 0,
+        "functions": 0,
+        "lines": 0,
+        "statements": 0
+      }
     }
   }
 }
