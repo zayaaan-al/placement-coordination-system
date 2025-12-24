@@ -21,17 +21,29 @@ const TrainerDashboard = () => {
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [pendingStudents, setPendingStudents] = useState([])
+  const [recentStudents, setRecentStudents] = useState([])
+  const [statsHighlight, setStatsHighlight] = useState(false)
+  const [activityHighlight, setActivityHighlight] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
   }, [])
 
+  // Subtle highlight when summary stats update
+  useEffect(() => {
+    if (!stats) return
+    setStatsHighlight(true)
+    const timeout = setTimeout(() => setStatsHighlight(false), 800)
+    return () => clearTimeout(timeout)
+  }, [stats?.avgScore, stats?.totalEvaluations, stats?.totalStudents])
+
   const fetchDashboardData = async () => {
     try {
-      const [studentsRes, analyticsRes, pendingRes] = await Promise.all([
+      const [studentsRes, analyticsRes, pendingRes, recentStudentsRes] = await Promise.all([
         trainersAPI.getTrainerStudents(user._id, { limit: 10 }),
         trainersAPI.getTrainerAnalytics(user._id),
-        trainersAPI.getPendingStudents()
+        trainersAPI.getPendingStudents(),
+        trainersAPI.getRecentEvaluatedStudents()
       ])
 
       if (studentsRes.data.success) {
@@ -46,20 +58,26 @@ const TrainerDashboard = () => {
         setPendingStudents(pendingRes.data.data || [])
       }
 
-      // Calculate basic stats
+      if (recentStudentsRes.data.success) {
+        setRecentStudents(recentStudentsRes.data.data || [])
+      }
+
+      // Calculate basic stats using real trainer evaluation analytics
       const totalStudents = studentsRes.data.data.students.length
-      const avgScore = studentsRes.data.data.students.reduce((sum, s) => sum + s.aggregateScore, 0) / totalStudents || 0
       const approvedStudents = studentsRes.data.data.students.filter(s => s.placementStatus === 'approved').length
+      const totalEvaluations = analyticsRes.data.data.evaluationStats?.totalEvaluations || 0
+      const avgScorePercentage = analyticsRes.data.data.evaluationStats?.avgScorePercentage || 0
 
       setStats({
         totalStudents,
-        avgScore: Math.round(avgScore),
+        avgScore: Math.round(avgScorePercentage),
         approvedStudents,
-        totalEvaluations: analyticsRes.data.data.evaluationStats?.totalEvaluations || 0
+        totalEvaluations
       })
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
+      toast.error('Failed to load trainer dashboard analytics')
     } finally {
       setLoading(false)
     }
@@ -89,14 +107,6 @@ const TrainerDashboard = () => {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <LoadingSpinner size="large" />
-      </div>
-    )
-  }
-
   const performanceData = analytics?.monthlyTrend?.map(item => ({
     month: `${item._id.month}/${item._id.year}`,
     evaluations: item.count,
@@ -110,6 +120,24 @@ const TrainerDashboard = () => {
   })) || []
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+
+  const evalStats = analytics?.evaluationStats || {}
+
+  // Highlight recent activity when this-month count changes
+  useEffect(() => {
+    if (evalStats.evaluationsThisMonth == null) return
+    setActivityHighlight(true)
+    const timeout = setTimeout(() => setActivityHighlight(false), 800)
+    return () => clearTimeout(timeout)
+  }, [evalStats.evaluationsThisMonth])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="large" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -125,7 +153,9 @@ const TrainerDashboard = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-4 transition ${
+          statsHighlight ? 'ring-2 ring-primary-200 bg-primary-50/40' : ''
+        }`}>
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <UserGroupIcon className="h-8 w-8 text-primary-600" />
@@ -195,32 +225,55 @@ const TrainerDashboard = () => {
 
         {/* Skills Distribution */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Top Skills Evaluated</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Top Skills Evaluated</h3>
+          <p className="text-xs text-gray-500 mb-3">Ranked by average score and frequency.</p>
           {skillsData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={skillsData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {skillsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="space-y-3">
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={skillsData}
+                    layout="vertical"
+                    margin={{ top: 5, right: 16, bottom: 5, left: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} />
+                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      formatter={(value, name, props) => {
+                        if (name === 'Average score') return [`${value}%`, name]
+                        if (name === 'Evaluations') return [value, name]
+                        return [value, name]
+                      }}
+                    />
+                    <Bar dataKey="score" name="Average score" fill="#6366f1" radius={[4, 4, 4, 4]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="space-y-1 text-xs">
+                {skillsData.map((skill, idx) => (
+                  <li key={skill.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-[11px] font-semibold text-gray-600">
+                        {idx + 1}
+                      </span>
+                      <span className="font-medium text-gray-800">{skill.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-600">{skill.score}%</span>
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
+                        {skill.count} evals
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-64 text-gray-500">
+            <div className="flex items-center justify-center h-40 text-gray-500 text-sm">
               <div className="text-center">
-                <StarIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                <p>No skills data available</p>
+                <StarIcon className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+                <p>No skills data available yet.</p>
               </div>
             </div>
           )}
@@ -236,7 +289,7 @@ const TrainerDashboard = () => {
           </Link>
         </div>
 
-        {students.length > 0 ? (
+        {recentStudents.length > 0 ? (
           <div className="overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -244,41 +297,38 @@ const TrainerDashboard = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {students.slice(0, 5).map((student) => (
-                  <tr key={student._id}>
+                {recentStudents.map((entry) => {
+                  const studentName = `${entry.studentUser?.name?.first || ''} ${entry.studentUser?.name?.last || ''}`.trim()
+                  const email = entry.studentUser?.email
+                  return (
+                  <tr key={entry.studentProfileId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-8 w-8">
                           <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
                             <span className="text-sm font-medium text-primary-600">
-                              {student.userId?.name?.first?.[0]}{student.userId?.name?.last?.[0]}
+                              {studentName?.[0] || '?'}
                             </span>
                           </div>
                         </div>
                         <div className="ml-3">
                           <p className="text-sm font-medium text-gray-900">
-                            {student.userId?.name?.first} {student.userId?.name?.last}
+                            {studentName}
                           </p>
-                          <p className="text-sm text-gray-500">{student.userId?.email}</p>
+                          <p className="text-sm text-gray-500">{email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className="text-sm text-gray-900">{student.rollNo}</span>
+                      <span className="text-sm text-gray-900">{entry.studentProfile?.rollNo}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className="text-sm text-gray-900">{student.batch}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <span className="text-sm font-medium text-gray-900">
-                        {student.aggregateScore}%
-                      </span>
+                      <span className="text-sm text-gray-900">{entry.studentProfile?.batch}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -286,15 +336,18 @@ const TrainerDashboard = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.trainerRemarks && student.trainerRemarks.length > 0 ? (
-                        <span className="text-sm text-gray-700">Has remarks</span>
+                      {entry.notes ? (
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 max-w-xs truncate">
+                          {entry.notes}
+                        </span>
                       ) : (
                         <span className="text-sm text-gray-400">No remarks</span>
                       )}
                     </td>
                     
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -399,14 +452,21 @@ const TrainerDashboard = () => {
           </div>
         </Link>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition ${
+          activityHighlight ? 'ring-2 ring-warning-200 bg-amber-50/40' : ''
+        }`}>
           <div className="flex items-center">
             <ClockIcon className="h-8 w-8 text-warning-600" />
             <div className="ml-4">
               <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
               <p className="text-sm text-gray-600">
-                {analytics?.evaluationStats?.totalEvaluations || 0} evaluations this month
+                {evalStats.evaluationsThisMonth || 0} evaluations this month
               </p>
+              {evalStats.lastEvaluationAt && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Last evaluation on {new Date(evalStats.lastEvaluationAt).toLocaleDateString()}
+                </p>
+              )}
             </div>
           </div>
         </div>

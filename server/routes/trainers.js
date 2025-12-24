@@ -76,6 +76,103 @@ router.get('/me/students/:studentProfileId/evaluations', authenticate, authorize
   }
 });
 
+/**
+ * @route   GET /api/v1/trainers/me/analytics/recent-students
+ * @desc    Get latest evaluated students for the logged-in trainer
+ * @access  Private (trainer only)
+ */
+router.get('/me/analytics/recent-students', authenticate, authorize('trainer'), async (req, res, next) => {
+  try {
+    const trainerId = req.user._id;
+
+    // Aggregate latest month average percentage per student profile for this trainer
+    const recentEvaluations = await StudentEvaluation.aggregate([
+      { $match: { trainerId } },
+      {
+        $addFields: {
+          monthKey: {
+            $dateToString: { format: '%Y-%m', date: '$recordedDate' }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: { studentProfileId: '$studentProfileId', monthKey: '$monthKey' },
+          avgPercent: {
+            $avg: {
+              $cond: [
+                { $gt: ['$maxScore', 0] },
+                { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] },
+                0
+              ]
+            }
+          },
+          totalScore: { $sum: '$score' },
+          totalMaxScore: { $sum: '$maxScore' },
+          notes: { $last: '$notes' },
+          recordedDate: { $max: '$recordedDate' }
+        }
+      },
+      { $sort: { '_id.studentProfileId': 1, recordedDate: -1 } },
+      {
+        $group: {
+          _id: '$_id.studentProfileId',
+          monthKey: { $first: '$_id.monthKey' },
+          avgPercent: { $first: '$avgPercent' },
+          score: { $first: '$totalScore' },
+          maxScore: { $first: '$totalMaxScore' },
+          notes: { $first: '$notes' },
+          recordedDate: { $first: '$recordedDate' }
+        }
+      },
+      { $sort: { recordedDate: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: 'studentprofiles',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'studentProfile'
+        }
+      },
+      { $unwind: '$studentProfile' },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'studentProfile.userId',
+          foreignField: '_id',
+          as: 'studentUser'
+        }
+      },
+      { $unwind: '$studentUser' },
+      {
+        $project: {
+          _id: 0,
+          studentProfileId: '$_id',
+          avgPercent: 1,
+          score: 1,
+          maxScore: 1,
+          notes: 1,
+          recordedDate: 1,
+          monthKey: 1,
+          'studentProfile.rollNo': 1,
+          'studentProfile.batch': 1,
+          'studentProfile.placementStatus': 1,
+          'studentUser.name': 1,
+          'studentUser.email': 1
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: recentEvaluations
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/me/students/:studentProfileId/evaluations', authenticate, authorize('trainer'), async (req, res, next) => {
   try {
     const { error, value } = createEvaluationSchema.validate(req.body);
@@ -507,7 +604,7 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
     }
 
     // Get evaluation statistics
-    const evaluationStats = await TrainerEvaluation.aggregate([
+    const evaluationStatsArr = await TrainerEvaluation.aggregate([
       { $match: { trainerId: req.params.id } },
       {
         $group: {
@@ -518,19 +615,40 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
           avgCommunication: { $avg: '$communicationSkills' },
           avgProblemSolving: { $avg: '$problemSolving' },
           avgTeamwork: { $avg: '$teamwork' },
-          avgPunctuality: { $avg: '$punctuality' }
+          avgPunctuality: { $avg: '$punctuality' },
+          // Convert 1-5 overall rating to a 0-100 score and average it
+          avgScorePercentage: { $avg: { $multiply: ['$overallRating', 20] } }
         }
       }
     ]);
 
-    // Get monthly evaluation trend
+    const baseStats = evaluationStatsArr[0] || {};
+
+    // Compute evaluationsThisMonth and lastEvaluationAt separately for clarity
+    const now = new Date();
+    const currentYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth(); // 0-based
+    const monthStart = new Date(Date.UTC(currentYear, currentMonth, 1, 0, 0, 0));
+    const monthEnd = new Date(Date.UTC(currentYear, currentMonth + 1, 1, 0, 0, 0));
+
+    const [evaluationsThisMonth, lastEvaluation] = await Promise.all([
+      TrainerEvaluation.countDocuments({
+        trainerId: req.params.id,
+        createdAt: { $gte: monthStart, $lt: monthEnd }
+      }),
+      TrainerEvaluation.findOne({ trainerId: req.params.id })
+        .sort({ createdAt: -1 })
+        .select('createdAt')
+    ]);
+
+    // Get monthly evaluation trend based on creation time
     const monthlyTrend = await TrainerEvaluation.aggregate([
       { $match: { trainerId: req.params.id } },
       {
         $group: {
           _id: {
-            year: { $year: '$evaluationDate' },
-            month: { $month: '$evaluationDate' }
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' }
           },
           count: { $sum: 1 },
           avgRating: { $avg: '$overallRating' }
@@ -576,7 +694,11 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        evaluationStats: evaluationStats[0] || {},
+        evaluationStats: {
+          ...baseStats,
+          evaluationsThisMonth,
+          lastEvaluationAt: lastEvaluation ? lastEvaluation.createdAt : null
+        },
         monthlyTrend,
         skillStats,
         studentPerformance: studentPerformance[0] || {}
