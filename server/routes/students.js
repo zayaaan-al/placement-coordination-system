@@ -113,6 +113,7 @@ router.get('/me/performance', authenticate, authorize(['student']), async (req, 
           label: date.toLocaleString('default', { month: 'long', year: 'numeric' }),
           weeklyEntries: [],
           springMeet: null,
+          sprintMeet: null,
           stats: {
             averagePercentage: null,
             perTypeAverages: {},
@@ -145,6 +146,7 @@ router.get('/me/performance', authenticate, authorize(['student']), async (req, 
 
       if (isSpringMeet) {
         monthBucket.springMeet = baseEntry;
+        monthBucket.sprintMeet = baseEntry;
       } else if (evaluation.frequency === 'weekly') {
         monthBucket.weeklyEntries.push(baseEntry);
       }
@@ -193,6 +195,82 @@ router.get('/me/performance', authenticate, authorize(['student']), async (req, 
       });
     });
 
+    let overallPerformance = null;
+
+    const monthBucketsWithAverage = [];
+    Object.values(groupedByYearMonth).forEach((yearBucket) => {
+      Object.values(yearBucket.months).forEach((monthBucket) => {
+        if (monthBucket && monthBucket.stats && monthBucket.stats.averagePercentage != null) {
+          monthBucketsWithAverage.push(monthBucket);
+        }
+      });
+    });
+
+    if (monthBucketsWithAverage.length) {
+      const totalAverage = monthBucketsWithAverage.reduce(
+        (sum, monthBucket) => sum + monthBucket.stats.averagePercentage,
+        0
+      );
+      const averagePercentage = totalAverage / monthBucketsWithAverage.length;
+
+      const perTypeAggregate = {};
+      monthBucketsWithAverage.forEach((monthBucket) => {
+        const perType = monthBucket.stats.perTypeAverages || {};
+        Object.keys(perType).forEach((type) => {
+          if (!perTypeAggregate[type]) {
+            perTypeAggregate[type] = { total: 0, count: 0 };
+          }
+          perTypeAggregate[type].total += perType[type];
+          perTypeAggregate[type].count += 1;
+        });
+      });
+
+      const perTypeAverages = Object.keys(perTypeAggregate).reduce((acc, type) => {
+        const { total, count } = perTypeAggregate[type];
+        acc[type] = count ? total / count : null;
+        return acc;
+      }, {});
+
+      const sortedByAverage = [...monthBucketsWithAverage].sort(
+        (a, b) => (b.stats.averagePercentage || 0) - (a.stats.averagePercentage || 0)
+      );
+      const bestMonthBucket = sortedByAverage[0];
+      const weakestMonthBucket = sortedByAverage[sortedByAverage.length - 1];
+
+      const overallAvg = averagePercentage;
+      let grade = null;
+      if (overallAvg != null) {
+        if (overallAvg >= 80) {
+          grade = 'Excellent';
+        } else if (overallAvg >= 60) {
+          grade = 'Good';
+        } else {
+          grade = 'Needs Improvement';
+        }
+      }
+
+      overallPerformance = {
+        averagePercentage,
+        perTypeAverages,
+        bestMonth: bestMonthBucket
+          ? {
+              monthKey: bestMonthBucket.monthKey,
+              label: bestMonthBucket.label,
+              averagePercentage: bestMonthBucket.stats.averagePercentage,
+            }
+          : null,
+        weakestMonth: weakestMonthBucket
+          ? {
+              monthKey: weakestMonthBucket.monthKey,
+              label: weakestMonthBucket.label,
+              averagePercentage: weakestMonthBucket.stats.averagePercentage,
+            }
+          : null,
+        monthsCount: monthBucketsWithAverage.length,
+        grade,
+      };
+    }
+
     res.json({
       success: true,
       data: {
@@ -202,7 +280,8 @@ router.get('/me/performance', authenticate, authorize(['student']), async (req, 
         latestByType,
         weeklyEvaluations,
         monthlyEvaluations,
-        groupedByYearMonth
+        groupedByYearMonth,
+        overallPerformance
       }
     });
   } catch (error) {

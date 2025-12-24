@@ -67,7 +67,7 @@ Returns grouped performance data for the **currently authenticated student** onl
               "score": 70,
               "maxScore": 100,
               "percentage": 70,
-              "periodLabel": "Spring Meet",
+              "periodLabel": "Sprint Meet",
               "recordedDate": "2025-03-20T00:00:00.000Z"
             },
             "stats": {
@@ -114,7 +114,7 @@ Returns **hero metrics** for the latest month that has evaluations for the stude
       "score": 70,
       "maxScore": 100,
       "percentage": 70,
-      "periodLabel": "Spring Meet",
+      "periodLabel": "Sprint Meet",
       "recordedDate": "2025-03-20T00:00:00.000Z"
     },
     "status": "COMPLETED", // or "IN_PROGRESS" when no spring_meet yet
@@ -226,7 +226,7 @@ These are consumed by the Student Performance page.
 #### `MonthDetails.jsx`
 
 - Displays current month label and `<select>` for `availableMonths`.
-- Shows Spring Meet details if `month.springMeet` exists.
+- Shows Sprint Meet details if `month.springMeet` exists.
 
 #### `WeeklyTable.jsx`
 
@@ -238,7 +238,7 @@ These are consumed by the Student Performance page.
 
 - Combined line + stacked bar chart using Recharts:
   - X-axis: month labels.
-  - Stacked bars: Aptitude, Logical, Machine, Spring Meet (all in %).
+  - Stacked bars: Aptitude, Logical, Machine, Sprint Meet (all in %).
   - Line: monthly average percentage.
 - Custom, keyboard-focusable legend:
   - `<button>`s with `aria-pressed`, focus ring, Enter/Space handlers.
@@ -309,7 +309,7 @@ Client-side (Jest + React Testing Library):
      - Hero shows current month, status, average %, per-type averages, and last updated.
      - Month selector lists months with evaluations.
      - Weekly table shows entries for the selected month.
-     - Spring Meet card appears when a `spring_meet` evaluation exists.
+     - Sprint Meet card appears when a `spring_meet` evaluation exists.
 
 2. **Charts & insights**
    - With at least 2 months of data:

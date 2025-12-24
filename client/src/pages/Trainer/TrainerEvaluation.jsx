@@ -26,7 +26,7 @@ const TrainerEvaluation = () => {
     { value: 'aptitude', label: 'Aptitude (Weekly, out of 25)' },
     { value: 'logical', label: 'Logical (Weekly)' },
     { value: 'machine', label: 'Machine (Weekly)' },
-    { value: 'spring_meet', label: 'Spring Meet (Monthly)' }
+    { value: 'spring_meet', label: 'Sprint Meet (Monthly)' }
   ]), [])
 
   const defaultMaxScore = (type) => {

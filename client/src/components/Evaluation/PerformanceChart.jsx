@@ -5,7 +5,7 @@ const seriesConfig = [
   { key: 'aptitude', label: 'Aptitude', color: '#3b82f6' },
   { key: 'logical', label: 'Logical', color: '#22c55e' },
   { key: 'machine', label: 'Machine', color: '#f97316' },
-  { key: 'spring_meet', label: 'Spring Meet', color: '#a855f7' },
+  { key: 'spring_meet', label: 'Sprint Meet', color: '#a855f7' },
   { key: 'average', label: 'Monthly average', color: '#111827' },
 ]
 
@@ -110,7 +110,7 @@ const PerformanceChart = ({ monthsFlat }) => {
               <Bar dataKey="machine" stackId="tests" fill="#f97316" name="Machine" isAnimationActive />
             )}
             {visible.spring_meet && (
-              <Bar dataKey="spring_meet" stackId="tests" fill="#a855f7" name="Spring Meet" isAnimationActive />
+              <Bar dataKey="spring_meet" stackId="tests" fill="#a855f7" name="Sprint Meet" isAnimationActive />
             )}
             <Line
               type="monotone"

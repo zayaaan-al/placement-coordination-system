@@ -8,6 +8,7 @@ import WeeklyTable from '../../components/Evaluation/WeeklyTable'
 import InsightsPanel from '../../components/Evaluation/InsightsPanel'
 import PerformanceChart from '../../components/Evaluation/PerformanceChart'
 import WeekTrendChart from '../../components/Evaluation/WeekTrendChart'
+import OverallPerformanceSummary from '../../components/Evaluation/OverallPerformanceSummary'
 
 const POLL_INTERVAL_MS = 20000
 
@@ -167,6 +168,10 @@ const MyPerformance = () => {
           <div className="hidden md:block">
             <WeekTrendChart weeklyEntries={weeklyEntriesForSelected} />
           </div>
+          <OverallPerformanceSummary
+            overallPerformance={performance?.overallPerformance}
+            performance={performance}
+          />
           <InsightsPanel hero={hero} performance={performance} />
         </div>
       </div>

@@ -21,14 +21,14 @@ const MonthDetails = ({ month, onChangeMonthKey, availableMonths }) => {
           ))}
         </select>
       </div>
-      {month && month.springMeet && (
+      {month && (month.sprintMeet || month.springMeet) && (
         <div className="rounded-xl bg-primary-50 px-4 py-3 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium tracking-wide text-primary-700 uppercase">Spring Meet</p>
+            <p className="text-xs font-medium tracking-wide text-primary-700 uppercase">Sprint Meet</p>
             <p className="text-sm font-semibold text-primary-900">
-              {month.springMeet.score}/{month.springMeet.maxScore} ({month.springMeet.percentage?.toFixed(1)}%)
+              {(month.sprintMeet || month.springMeet).score}/{(month.sprintMeet || month.springMeet).maxScore} ({(month.sprintMeet || month.springMeet).percentage?.toFixed(1)}%)
             </p>
-            <p className="text-xs text-primary-700 mt-0.5">{month.springMeet.periodLabel}</p>
+            <p className="text-xs text-primary-700 mt-0.5">{(month.sprintMeet || month.springMeet).periodLabel}</p>
           </div>
         </div>
       )}
