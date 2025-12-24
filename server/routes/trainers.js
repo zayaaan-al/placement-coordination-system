@@ -587,4 +587,260 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
   }
 });
 
+/**
+ * @route   GET /api/v1/trainers/me/students/analytics
+ * @desc    Get aggregated student performance analytics for the logged-in trainer
+ * @access  Private (trainer only)
+ */
+router.get('/me/students/analytics', authenticate, authorize('trainer'), async (req, res, next) => {
+  try {
+    const { batch, studentProfileId, month, threshold = 60 } = req.query;
+
+    const studentQuery = {
+      trainerId: req.user._id,
+      approvalStatus: 'approved'
+    };
+
+    if (batch) {
+      studentQuery.batch = batch;
+    }
+
+    if (studentProfileId) {
+      studentQuery._id = studentProfileId;
+    }
+
+    const studentProfiles = await StudentProfile.find(studentQuery)
+      .populate('userId', 'name email')
+      .select('userId rollNo batch aggregateScore');
+
+    if (studentProfiles.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          summary: {},
+          perStudent: [],
+          monthlyTrend: [],
+          typeBreakdown: [],
+          insights: {
+            mostImproved: null,
+            studentsBelowThreshold: []
+          }
+        }
+      });
+    }
+
+    const studentIds = studentProfiles.map((s) => s._id);
+
+    const evalQuery = {
+      trainerId: req.user._id,
+      studentProfileId: { $in: studentIds }
+    };
+
+    if (month) {
+      const [yearStr, monthStr] = month.split('-');
+      const year = parseInt(yearStr, 10);
+      const monthNum = parseInt(monthStr, 10) - 1;
+      if (!isNaN(year) && !isNaN(monthNum)) {
+        const from = new Date(Date.UTC(year, monthNum, 1, 0, 0, 0));
+        const to = new Date(Date.UTC(year, monthNum + 1, 0, 23, 59, 59));
+        evalQuery.recordedDate = { $gte: from, $lte: to };
+      }
+    }
+
+    const evaluations = await StudentEvaluation.find(evalQuery).lean();
+
+    if (evaluations.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          summary: {
+            totalStudents: studentProfiles.length,
+            totalEvaluations: 0,
+            avgScore: 0
+          },
+          perStudent: studentProfiles.map((s) => ({
+            studentProfileId: s._id,
+            name: `${s.userId?.name?.first || ''} ${s.userId?.name?.last || ''}`.trim(),
+            rollNo: s.rollNo,
+            batch: s.batch,
+            avgScore: 0,
+            latestScore: null,
+            trend: null
+          })),
+          monthlyTrend: [],
+          typeBreakdown: [],
+          insights: {
+            mostImproved: null,
+            studentsBelowThreshold: studentProfiles
+              .filter((s) => typeof s.aggregateScore === 'number' && s.aggregateScore < Number(threshold))
+              .map((s) => ({
+                studentProfileId: s._id,
+                name: `${s.userId?.name?.first || ''} ${s.userId?.name?.last || ''}`.trim(),
+                rollNo: s.rollNo,
+                batch: s.batch,
+                aggregateScore: s.aggregateScore
+              }))
+          }
+        }
+      });
+    }
+
+    const studentMap = new Map();
+    studentProfiles.forEach((s) => {
+      studentMap.set(String(s._id), s);
+    });
+
+    const perStudentMap = new Map();
+    const monthBuckets = new Map();
+    const typeBuckets = new Map();
+
+    evaluations.forEach((ev) => {
+      const key = String(ev.studentProfileId);
+      const profile = studentMap.get(key);
+      if (!profile) return;
+
+      const percent = ev.maxScore > 0 ? (ev.score / ev.maxScore) * 100 : 0;
+
+      if (!perStudentMap.has(key)) {
+        perStudentMap.set(key, {
+          studentProfileId: profile._id,
+          name: `${profile.userId?.name?.first || ''} ${profile.userId?.name?.last || ''}`.trim(),
+          rollNo: profile.rollNo,
+          batch: profile.batch,
+          total: 0,
+          count: 0,
+          latestDate: null,
+          latestScore: null,
+          monthlyScores: new Map()
+        });
+      }
+
+      const ps = perStudentMap.get(key);
+      ps.total += percent;
+      ps.count += 1;
+
+      const recDate = ev.recordedDate ? new Date(ev.recordedDate) : null;
+      if (recDate && (!ps.latestDate || recDate > ps.latestDate)) {
+        ps.latestDate = recDate;
+        ps.latestScore = percent;
+      }
+
+      if (recDate) {
+        const mKey = `${recDate.getUTCFullYear()}-${String(recDate.getUTCMonth() + 1).padStart(2, '0')}`;
+        if (!ps.monthlyScores.has(mKey)) {
+          ps.monthlyScores.set(mKey, { total: 0, count: 0 });
+        }
+        const ms = ps.monthlyScores.get(mKey);
+        ms.total += percent;
+        ms.count += 1;
+
+        if (!monthBuckets.has(mKey)) {
+          monthBuckets.set(mKey, { total: 0, count: 0 });
+        }
+        const mb = monthBuckets.get(mKey);
+        mb.total += percent;
+        mb.count += 1;
+      }
+
+      const typeKey = ev.type;
+      if (!typeBuckets.has(typeKey)) {
+        typeBuckets.set(typeKey, { total: 0, count: 0 });
+      }
+      const tb = typeBuckets.get(typeKey);
+      tb.total += percent;
+      tb.count += 1;
+    });
+
+    const perStudent = Array.from(perStudentMap.values()).map((ps) => {
+      const avgScore = ps.count > 0 ? ps.total / ps.count : 0;
+
+      const months = Array.from(ps.monthlyScores.keys()).sort();
+      let firstMonthAvg = null;
+      let lastMonthAvg = null;
+      if (months.length > 0) {
+        const firstKey = months[0];
+        const lastKey = months[months.length - 1];
+        const fm = ps.monthlyScores.get(firstKey);
+        const lm = ps.monthlyScores.get(lastKey);
+        firstMonthAvg = fm.count > 0 ? fm.total / fm.count : null;
+        lastMonthAvg = lm.count > 0 ? lm.total / lm.count : null;
+      }
+
+      const trend = firstMonthAvg !== null && lastMonthAvg !== null
+        ? lastMonthAvg - firstMonthAvg
+        : null;
+
+      return {
+        studentProfileId: ps.studentProfileId,
+        name: ps.name,
+        rollNo: ps.rollNo,
+        batch: ps.batch,
+        avgScore: Math.round(avgScore),
+        latestScore: ps.latestScore !== null ? Math.round(ps.latestScore) : null,
+        trend
+      };
+    });
+
+    const totalEvaluations = evaluations.length;
+    const totalScore = evaluations.reduce((sum, ev) => {
+      const percent = ev.maxScore > 0 ? (ev.score / ev.maxScore) * 100 : 0;
+      return sum + percent;
+    }, 0);
+    const avgScore = totalEvaluations > 0 ? totalScore / totalEvaluations : 0;
+
+    const monthlyTrend = Array.from(monthBuckets.entries())
+      .sort(([a], [b]) => (a > b ? 1 : -1))
+      .map(([key, value]) => ({
+        month: key,
+        avgScore: value.count > 0 ? Math.round((value.total / value.count) * 10) / 10 : 0,
+        evaluations: value.count
+      }));
+
+    const typeBreakdown = Array.from(typeBuckets.entries()).map(([type, value]) => ({
+      type,
+      avgScore: value.count > 0 ? Math.round((value.total / value.count) * 10) / 10 : 0,
+      evaluations: value.count
+    }));
+
+    let mostImproved = null;
+    perStudent.forEach((ps) => {
+      if (ps.trend === null) return;
+      if (!mostImproved || ps.trend > mostImproved.trend) {
+        mostImproved = ps;
+      }
+    });
+
+    const numericThreshold = Number(threshold) || 60;
+    const studentsBelowThreshold = perStudent
+      .filter((ps) => ps.avgScore < numericThreshold)
+      .map((ps) => ({
+        studentProfileId: ps.studentProfileId,
+        name: ps.name,
+        rollNo: ps.rollNo,
+        batch: ps.batch,
+        avgScore: ps.avgScore
+      }));
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          totalStudents: studentProfiles.length,
+          totalEvaluations,
+          avgScore: Math.round(avgScore)
+        },
+        perStudent,
+        monthlyTrend,
+        typeBreakdown,
+        insights: {
+          mostImproved,
+          studentsBelowThreshold
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

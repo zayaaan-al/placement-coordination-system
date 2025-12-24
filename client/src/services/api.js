@@ -123,6 +123,8 @@ export const trainersAPI = {
     api.post(`/trainers/me/students/${studentProfileId}/evaluations`, data),
   updateEvaluation: (evaluationId, data) =>
     api.put(`/trainers/me/evaluations/${evaluationId}`, data),
+  getStudentAnalytics: (params) =>
+    api.get('/trainers/me/students/analytics', { params }),
 }
 
 // Notifications API
