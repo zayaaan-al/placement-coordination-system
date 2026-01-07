@@ -27,6 +27,73 @@ import {
   Bar
 } from 'recharts'
 
+const AggregateRing = ({ value = 0, size = 96, strokeWidth = 8 }) => {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const clamped = Math.max(0, Math.min(100, value))
+  const offset = circumference - (clamped / 100) * circumference
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      className="transform -rotate-90"
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke="#e5e7eb"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <defs>
+        <linearGradient id="aggGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#4f46e5" />
+          <stop offset="100%" stopColor="#22c55e" />
+        </linearGradient>
+      </defs>
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke="url(#aggGradient)"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="transition-all duration-700 ease-out"
+        fill="none"
+      />
+      <text
+        x="50%"
+        y="50%"
+        dominantBaseline="middle"
+        textAnchor="middle"
+        className="fill-gray-900 text-sm font-semibold rotate-90"
+      >
+        {clamped}%
+      </text>
+    </svg>
+  )
+}
+
+const StatusPill = ({ icon: Icon, label, tone = 'neutral' }) => {
+  const tones = {
+    success: 'from-emerald-500/10 to-emerald-600/10 text-emerald-700 border-emerald-200',
+    warning: 'from-amber-500/10 to-amber-600/10 text-amber-700 border-amber-200',
+    danger: 'from-rose-500/10 to-rose-600/10 text-rose-700 border-rose-200',
+    neutral: 'from-gray-500/10 to-gray-600/10 text-gray-700 border-gray-200'
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium bg-gradient-to-r ${tones[tone]}`}>
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      <span className="uppercase tracking-wide">{label}</span>
+    </span>
+  )
+}
+
 const StudentProfile = () => {
   const { user, updateUser } = useAuth()
   const [profile, setProfile] = useState(null)
@@ -182,6 +249,31 @@ const StudentProfile = () => {
     ? approvalStatus.charAt(0).toUpperCase() + approvalStatus.slice(1)
     : 'Not set'
 
+  const placementStatus = studentProfile?.placementStatus
+  const placementEligible = studentProfile?.placementEligible
+
+  const approvalTone = approvalStatus === 'approved'
+    ? 'success'
+    : approvalStatus === 'pending'
+      ? 'warning'
+      : approvalStatus === 'rejected'
+        ? 'danger'
+        : 'neutral'
+
+  const placementTone = placementStatus === 'approved' || placementStatus === 'placed'
+    ? 'success'
+    : placementStatus === 'shortlisted'
+      ? 'warning'
+      : placementStatus
+        ? 'neutral'
+        : 'neutral'
+
+  const eligibleTone = placementEligible == null
+    ? 'neutral'
+    : placementEligible
+      ? 'success'
+      : 'danger'
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -224,10 +316,11 @@ const StudentProfile = () => {
           </div>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-2">
-          <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-white/90 text-gray-800 shadow-sm">
-            <CheckBadgeIcon className="h-4 w-4 text-emerald-500" />
-            <span className="uppercase tracking-wide">{approvalLabel}</span>
-          </div>
+          <StatusPill
+            icon={CheckBadgeIcon}
+            label={approvalLabel}
+            tone={approvalTone}
+          />
           <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-indigo-100">
             <div className="inline-flex items-center gap-1">
               <CalendarDaysIcon className="h-4 w-4" />
@@ -279,102 +372,123 @@ const StudentProfile = () => {
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Basic Information */}
-          <div className="card bg-white/90 border border-gray-200 shadow-sm">
+          <div className="card bg-white/90 border border-gray-200 shadow-sm transition-transform transition-shadow duration-200 hover:-translate-y-0.5 hover:shadow-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-1">Basic Information</h3>
             <p className="text-xs text-gray-500 mb-4">Your personal details and contact information.</p>
 
             {editing ? (
               <form onSubmit={handleSubmit(updateProfile)} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="form-label">First Name</label>
+                  <div className="relative">
                     <input
                       {...register('name.first', { required: 'First name is required' })}
-                      className="form-input"
+                      className="peer w-full rounded-xl border border-gray-300 bg-white px-3 pt-5 pb-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
+                      placeholder=" "
                     />
+                    <label
+                      className="pointer-events-none absolute left-3 top-3.5 text-sm text-gray-400 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary-600"
+                    >
+                      First Name
+                    </label>
                     {errors.name?.first && (
-                      <p className="form-error">{errors.name.first.message}</p>
+                      <p className="mt-1 text-xs text-rose-500">{errors.name.first.message}</p>
                     )}
                   </div>
-                  <div>
-                    <label className="form-label">Last Name</label>
+                  <div className="relative">
                     <input
                       {...register('name.last', { required: 'Last name is required' })}
-                      className="form-input"
+                      className="peer w-full rounded-xl border border-gray-300 bg-white px-3 pt-5 pb-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
+                      placeholder=" "
                     />
+                    <label
+                      className="pointer-events-none absolute left-3 top-3.5 text-sm text-gray-400 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary-600"
+                    >
+                      Last Name
+                    </label>
                     {errors.name?.last && (
-                      <p className="form-error">{errors.name.last.message}</p>
+                      <p className="mt-1 text-xs text-rose-500">{errors.name.last.message}</p>
                     )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="form-label">Phone</label>
+                <div className="relative">
                   <input
                     {...register('profile.phone')}
-                    className="form-input"
-                    placeholder="Enter your phone number"
+                    className="peer w-full rounded-xl border border-gray-300 bg-white px-3 pt-5 pb-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
+                    placeholder=" "
                   />
+                  <label
+                    className="pointer-events-none absolute left-3 top-3.5 text-sm text-gray-400 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary-600"
+                  >
+                    Phone
+                  </label>
                 </div>
 
-                <div>
-                  <label className="form-label">Bio</label>
+                <div className="relative">
                   <textarea
                     {...register('profile.bio')}
-                    className="form-input"
-                    rows={3}
-                    placeholder="Tell us about yourself"
+                    className="peer w-full rounded-xl border border-gray-300 bg-white px-3 pt-5 pb-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400 min-h-[96px] resize-y"
+                    placeholder=" "
                   />
+                  <label
+                    className="pointer-events-none absolute left-3 top-3.5 text-sm text-gray-400 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary-600"
+                  >
+                    Bio
+                  </label>
                 </div>
 
-                <div className="flex space-x-3">
-                  <button type="submit" className="btn-primary">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    className="btn-primary rounded-full px-5 py-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition"
+                  >
                     Save Changes
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
-                    className="btn-secondary"
+                    className="btn-secondary rounded-full px-4 py-2 text-xs sm:text-sm"
                   >
                     Cancel
                   </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
-                    <p className="mt-1 text-gray-900 font-medium">{profile?.name?.first} {profile?.name?.last}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
-                    <p className="mt-1 text-gray-900 break-all">{profile?.email}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</label>
-                    <p className="mt-1 text-gray-900">{profile?.profile?.phone || 'Not provided'}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
-                    <p className="mt-1 text-gray-900 capitalize">{profile?.role}</p>
-                  </div>
-                </div>
-                {profile?.profile?.bio && (
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bio</label>
-                    <p className="mt-1 text-gray-900 leading-relaxed">{profile.profile.bio}</p>
-                  </div>
-                )}
               </div>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col items-start md:items-stretch">
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
+                  <p className="mt-1 text-gray-900 font-medium">{profile?.name?.first} {profile?.name?.last}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                  <p className="mt-1 text-gray-900 break-all">{profile?.email}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</label>
+                  <p className="mt-1 text-gray-900">{profile?.profile?.phone || 'Not provided'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
+                  <p className="mt-1 text-gray-900 capitalize">{profile?.role}</p>
+                </div>
+              </div>
+              {profile?.profile?.bio && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bio</label>
+                  <p className="mt-1 text-gray-900 leading-relaxed">{profile.profile.bio}</p>
+                </div>
+              )}
+            </div>
             )}
           </div>
+          
 
           {/* Academic Information */}
           {studentProfile && (
-            <div className="card">
+            <div className="card bg-white/90 border border-gray-200 shadow-sm transition-transform transition-shadow duration-200 hover:-translate-y-0.5 hover:shadow-md px-4 sm:px-5 py-4 sm:py-5">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Academic Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -391,31 +505,31 @@ const StudentProfile = () => {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Aggregate Score</label>
-                  <p className="text-2xl font-bold text-primary-600">
-                    {studentProfile.aggregateScore}%
-                  </p>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                <div className="flex items-center gap-4 md:justify-start justify-center">
+                  <AggregateRing value={studentProfile.aggregateScore || 0} />
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Aggregate Score</label>
+                    <p className="mt-1 text-sm text-gray-600">Overall performance across trainer evaluations.</p>
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Placement Status</label>
-                  <span className={`badge ${
-                    studentProfile.placementStatus === 'approved' ? 'badge-success' :
-                    studentProfile.placementStatus === 'placed' ? 'badge-primary' :
-                    studentProfile.placementStatus === 'shortlisted' ? 'badge-warning' :
-                    'badge-gray'
-                  }`}>
-                    {studentProfile.placementStatus.replace('_', ' ')}
-                  </span>
+                  <div className="mt-1">
+                    <StatusPill
+                      label={placementStatus ? placementStatus.replace('_', ' ') : 'Not set'}
+                      tone={placementTone}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Placement Eligible</label>
-                  <span className={`badge ${
-                    studentProfile.placementEligible ? 'badge-success' : 'badge-danger'
-                  }`}>
-                    {studentProfile.placementEligible ? 'Yes' : 'No'}
-                  </span>
+                  <div className="mt-1">
+                    <StatusPill
+                      label={placementEligible == null ? 'Not set' : placementEligible ? 'Yes' : 'No'}
+                      tone={eligibleTone}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -423,12 +537,15 @@ const StudentProfile = () => {
 
           {/* Skills */}
           {studentProfile && (
-            <div className="card">
+            <div className="card bg-white/90 border border-gray-200 shadow-sm transition-transform transition-shadow duration-200 hover:-translate-y-0.5 hover:shadow-md px-4 sm:px-5 py-4 sm:py-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Skills</h3>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">Skills</h3>
+                  <p className="mt-1 text-xs text-gray-500">Track and manage your key technical abilities.</p>
+                </div>
                 <button
                   onClick={() => setEditingSkills(!editingSkills)}
-                  className="btn-secondary text-sm"
+                  className="inline-flex items-center rounded-full bg-gradient-to-r from-primary-500 to-indigo-500 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <PlusIcon className="h-4 w-4 mr-1" />
                   Add Skill
@@ -436,21 +553,22 @@ const StudentProfile = () => {
               </div>
 
               {editingSkills && (
-                <form onSubmit={handleSkillSubmit(addSkill)} className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <form onSubmit={handleSkillSubmit(addSkill)} className="mb-6 p-4 bg-gray-50 rounded-xl border border-dashed border-primary-100">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="form-label">Skill Name</label>
+                    <div className="relative">
                       <input
                         {...registerSkill('name', { required: 'Skill name is required' })}
-                        className="form-input"
-                        placeholder="e.g., JavaScript"
+                        className="peer w-full rounded-xl border border-gray-300 bg-white px-3 pt-5 pb-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
+                        placeholder=" "
                       />
+                      <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-gray-400 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary-600">
+                        Skill Name
+                      </label>
                       {skillErrors.name && (
-                        <p className="form-error">{skillErrors.name.message}</p>
+                        <p className="mt-1 text-xs text-rose-500">{skillErrors.name.message}</p>
                       )}
                     </div>
-                    <div>
-                      <label className="form-label">Level (0-100)</label>
+                    <div className="relative">
                       <input
                         {...registerSkill('level', { 
                           required: 'Level is required',
@@ -460,15 +578,18 @@ const StudentProfile = () => {
                         type="number"
                         min="0"
                         max="100"
-                        className="form-input"
-                        placeholder="85"
+                        className="peer w-full rounded-xl border border-gray-300 bg-white px-3 pt-5 pb-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-400"
+                        placeholder=" "
                       />
+                      <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-gray-400 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-focus:top-1.5 peer-focus:text-xs peer-focus:text-primary-600">
+                        Level (0-100)
+                      </label>
                       {skillErrors.level && (
-                        <p className="form-error">{skillErrors.level.message}</p>
+                        <p className="mt-1 text-xs text-rose-500">{skillErrors.level.message}</p>
                       )}
                     </div>
-                    <div className="flex items-end space-x-2">
-                      <button type="submit" className="btn-primary">
+                    <div className="flex items-end gap-2 justify-start md:justify-end">
+                      <button type="submit" className="btn-primary rounded-full px-4 py-2 text-xs sm:text-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition">
                         Add
                       </button>
                       <button
@@ -477,7 +598,7 @@ const StudentProfile = () => {
                           setEditingSkills(false)
                           resetSkill()
                         }}
-                        className="btn-secondary"
+                        className="btn-secondary rounded-full px-4 py-2 text-xs sm:text-sm"
                       >
                         Cancel
                       </button>
