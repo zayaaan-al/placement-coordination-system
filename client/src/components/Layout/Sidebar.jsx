@@ -33,8 +33,8 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
       ],
       trainer: [
         { name: 'Students', href: '/students', icon: UserGroupIcon },
-        { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
         { name: 'Evaluations', href: '/evaluations', icon: DocumentTextIcon },
+        { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
       ],
       coordinator: [
         { name: 'Student Management', href: '/student-management', icon: UserGroupIcon },
