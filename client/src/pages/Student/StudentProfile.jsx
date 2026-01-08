@@ -145,10 +145,31 @@ const StudentProfile = () => {
 
   const updateProfile = async (data) => {
     try {
-      const response = await usersAPI.updateProfile(data)
+      console.log('Updating profile with data:', data)
+      // Separate basic profile fields from student-specific fields
+      const { program, batch, ...basicProfileData } = data
+      console.log('Basic profile data:', basicProfileData)
+      console.log('Student profile data:', { program, batch })
+      
+      // Update basic profile
+      const response = await usersAPI.updateProfile(basicProfileData)
+      console.log('Update response:', response.data)
       if (response.data.success) {
+        // Update local state
         setProfile(prev => ({ ...prev, ...response.data.data }))
+        // Update auth context
         updateUser(response.data.data)
+        
+        // Update student-specific fields if provided
+        if (program || batch) {
+          const studentData = {}
+          if (program) studentData.program = program
+          if (batch) studentData.batch = batch
+          await updateStudentProfile(studentData)
+        }
+        
+        // Refetch to ensure latest data
+        await fetchProfile()
         setEditing(false)
         toast.success('Profile updated successfully')
       }
@@ -160,7 +181,9 @@ const StudentProfile = () => {
 
   const updateStudentProfile = async (data) => {
     try {
+      console.log('Updating student profile with data:', data)
       const response = await usersAPI.updateStudentProfile(data)
+      console.log('Student profile update response:', response.data)
       if (response.data.success) {
         setProfile(prev => ({ ...prev, studentProfile: response.data.data }))
         toast.success('Student profile updated successfully')
@@ -174,16 +197,22 @@ const StudentProfile = () => {
   const addSkill = async (data) => {
     try {
       const currentSkills = profile?.studentProfile?.skills || []
-      const newSkills = [...currentSkills, { ...data, lastUpdated: new Date() }]
+      // Only send fields required by server schema
+      const newSkill = {
+        name: data.name.trim(),
+        level: Number(data.level),
+        ...(data.tags && { tags: data.tags.map(t => t.trim()).filter(Boolean) })
+      }
+      // Strip server-added fields from existing skills before sending
+      const cleanCurrentSkills = currentSkills.map(skill => ({
+        name: skill.name,
+        level: skill.level,
+        ...(skill.tags && skill.tags.length > 0 && { tags: skill.tags })
+      }))
+      const newSkills = [...cleanCurrentSkills, newSkill]
+      console.log('Adding skill. New skills array:', JSON.stringify(newSkills, null, 2))
       
       await updateStudentProfile({ skills: newSkills })
-      setProfile(prev => ({
-        ...prev,
-        studentProfile: {
-          ...prev.studentProfile,
-          skills: newSkills
-        }
-      }))
       resetSkill()
       setEditingSkills(false)
       toast.success('Skill added successfully')
@@ -196,16 +225,16 @@ const StudentProfile = () => {
   const removeSkill = async (index) => {
     try {
       const currentSkills = profile?.studentProfile?.skills || []
-      const newSkills = currentSkills.filter((_, i) => i !== index)
+      const filteredSkills = currentSkills.filter((_, i) => i !== index)
+      // Strip server-added fields before sending
+      const newSkills = filteredSkills.map(skill => ({
+        name: skill.name,
+        level: skill.level,
+        ...(skill.tags && skill.tags.length > 0 && { tags: skill.tags })
+      }))
+      console.log('Removing skill. New skills array:', JSON.stringify(newSkills, null, 2))
       
       await updateStudentProfile({ skills: newSkills })
-      setProfile(prev => ({
-        ...prev,
-        studentProfile: {
-          ...prev.studentProfile,
-          skills: newSkills
-        }
-      }))
       toast.success('Skill removed successfully')
     } catch (error) {
       console.error('Error removing skill:', error)
@@ -440,14 +469,14 @@ const StudentProfile = () => {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="submit"
-                    className="btn-primary rounded-full px-5 py-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition"
+                    className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-primary-500 to-indigo-500 px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-200 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     Save Changes
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
-                    className="btn-secondary rounded-full px-4 py-2 text-xs sm:text-sm"
+                    className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-200 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
@@ -589,7 +618,7 @@ const StudentProfile = () => {
                       )}
                     </div>
                     <div className="flex items-end gap-2 justify-start md:justify-end">
-                      <button type="submit" className="btn-primary rounded-full px-4 py-2 text-xs sm:text-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition">
+                      <button type="submit" className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-primary-500 to-indigo-500 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-200 disabled:opacity-60 disabled:cursor-not-allowed">
                         Add
                       </button>
                       <button
@@ -598,7 +627,7 @@ const StudentProfile = () => {
                           setEditingSkills(false)
                           resetSkill()
                         }}
-                        className="btn-secondary rounded-full px-4 py-2 text-xs sm:text-sm"
+                        className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-200 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         Cancel
                       </button>
