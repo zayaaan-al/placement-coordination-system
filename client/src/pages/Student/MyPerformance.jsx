@@ -149,24 +149,28 @@ const MyPerformance = () => {
 
       <PerformanceHero hero={hero} trend={trendForHero} />
 
-      {/* Single column stacked layout with content-based widths */}
-      <div className="grid grid-cols-1 gap-6 auto-rows-min">
+      {/* Analytics Dashboard Layout */}
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Monthly Context - Full Width */}
         <MonthDetails
           month={currentMonth}
           onChangeMonthKey={handleChangeMonthKey}
           availableMonths={availableMonths}
         />
 
+        {/* Weekly Breakdown - Primary Section */}
         <WeeklyTable weeklyEntries={weeklyEntriesForSelected} />
 
-        {/* Chart sections - slightly narrower, centered */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8 xl:max-w-4xl xl:mx-auto">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-4 sm:px-6 sm:py-5 xl:max-w-2xl">
+        {/* Analytics Grid - 2×2 Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Row 1: Performance Overview */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-4 sm:px-6 sm:py-5">
             <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Performance Overview</h3>
             <PerformanceChart monthsFlat={availableMonths} />
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-4 sm:px-6 sm:py-5 xl:max-w-2xl">
+          {/* Row 1: Weekly Trend */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-4 sm:px-6 sm:py-5">
             <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Weekly Trend</h3>
             {/* Week-level chart on small screens (above monthly chart) */}
             <div className="block md:hidden">
@@ -177,16 +181,21 @@ const MyPerformance = () => {
               <WeekTrendChart weeklyEntries={weeklyEntriesForSelected} />
             </div>
           </div>
-        </div>
 
-        {/* Text-heavy sections - wider cards for readability */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8 xl:max-w-4xl xl:mx-auto">
-          <OverallPerformanceSummary
-            overallPerformance={performance?.overallPerformance}
-            performance={performance}
-          />
+          {/* Row 2: Total Performance */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-4 sm:px-6 sm:py-5">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Total Performance</h3>
+            <OverallPerformanceSummary
+              overallPerformance={performance?.overallPerformance}
+              performance={performance}
+            />
+          </div>
 
-          <InsightsPanel hero={hero} performance={performance} />
+          {/* Row 2: Insights */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-4 sm:px-6 sm:py-5">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Insights</h3>
+            <InsightsPanel hero={hero} performance={performance} />
+          </div>
         </div>
       </div>
     </div>
