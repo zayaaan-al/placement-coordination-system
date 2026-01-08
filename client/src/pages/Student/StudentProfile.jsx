@@ -27,6 +27,14 @@ import {
   Bar
 } from 'recharts'
 
+// Helper functions (need to be defined before components)
+const getScoreColor = (score) => {
+  if (score === null) return '#9CA3AF'
+  if (score < 40) return '#EF4444' // red
+  if (score < 70) return '#F59E0B' // yellow
+  return '#10B981' // green
+}
+
 const AggregateRing = ({ value = 0, size = 96, strokeWidth = 8 }) => {
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
@@ -78,6 +86,73 @@ const AggregateRing = ({ value = 0, size = 96, strokeWidth = 8 }) => {
   )
 }
 
+const PerformanceRing = ({ value = null, size = 120, strokeWidth = 12, trend = null }) => {
+  const [animatedValue, setAnimatedValue] = useState(0)
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const clamped = value !== null ? Math.max(0, Math.min(100, value)) : 0
+  const offset = circumference - (clamped / 100) * circumference
+  const color = getScoreColor(value)
+
+  // Animate on mount and value change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimatedValue(clamped)
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [clamped])
+
+  const TrendIcon = () => {
+    if (trend === 'up') return <span className="text-green-500 text-lg">↑</span>
+    if (trend === 'down') return <span className="text-red-500 text-lg">↓</span>
+    if (trend === 'stable') return <span className="text-gray-500 text-lg">→</span>
+    return null
+  }
+
+  return (
+    <div className="relative inline-flex flex-col items-center">
+      <svg
+        width={size}
+        height={size}
+        className="transform -rotate-90 transition-all duration-1000 ease-out"
+      >
+        {/* Background circle */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#E5E7EB"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* Progress circle */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference - (animatedValue / 100) * circumference}
+          className="transition-all duration-1000 ease-out hover:opacity-80"
+          fill="none"
+          style={{
+            filter: 'drop-shadow(0 0 6px rgba(0,0,0,0.1))'
+          }}
+        />
+      </svg>
+      {/* Center content */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-2xl font-bold" style={{ color }}>
+          {value !== null ? `${value}%` : 'N/A'}
+        </div>
+        <TrendIcon />
+      </div>
+    </div>
+  )
+}
+
 const StatusPill = ({ icon: Icon, label, tone = 'neutral' }) => {
   const tones = {
     success: 'from-emerald-500/10 to-emerald-600/10 text-emerald-700 border-emerald-200',
@@ -100,6 +175,7 @@ const StudentProfile = () => {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [editingSkills, setEditingSkills] = useState(false)
+  const [showTooltip, setShowTooltip] = useState(false)
   const [activeTab, setActiveTab] = useState('overview') // single Overview tab
   const [selectedMonth, setSelectedMonth] = useState('')
 
@@ -246,13 +322,13 @@ const StudentProfile = () => {
   const tests = studentProfile?.tests || []
 
   // Derived metrics based on existing studentProfile/tests data
-  const overallPerformance = typeof studentProfile?.aggregateScore === 'number'
-    ? Math.round(studentProfile.aggregateScore)
-    : tests.length
-      ? Math.round(
-          (tests.reduce((sum, t) => sum + (t.score / t.maxScore) * 100, 0) / tests.length) || 0
-        )
-      : 0
+  const overallPerformance = tests.length
+    ? Math.round(
+        (tests.reduce((sum, t) => sum + (t.score / t.maxScore) * 100, 0) / tests.length) || 0
+      )
+      : typeof studentProfile?.aggregateScore === 'number'
+        ? Math.round(studentProfile.aggregateScore)
+        : null
 
   const totalEvaluations = tests.length
   const lastEvaluationDate = tests.length
@@ -263,6 +339,43 @@ const StudentProfile = () => {
           .sort((a, b) => b - a)[0]
       )
     : null
+
+  // Get latest performance month
+  const latestPerformanceMonth = lastEvaluationDate
+    ? lastEvaluationDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : 'No evaluations yet'
+
+  // Calculate trend (current month vs previous month)
+  const getPerformanceTrend = () => {
+    if (!lastEvaluationDate || tests.length < 2) return null
+    
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth()
+    const currentYear = currentDate.getFullYear()
+    
+    const currentMonthTests = tests.filter(t => {
+      const testDate = new Date(t.date || t.recordedDate || t.createdAt)
+      return testDate.getMonth() === currentMonth && testDate.getFullYear() === currentYear
+    })
+    
+    const previousMonthTests = tests.filter(t => {
+      const testDate = new Date(t.date || t.recordedDate || t.createdAt)
+      const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
+      const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
+      return testDate.getMonth() === prevMonth && testDate.getFullYear() === prevYear
+    })
+    
+    if (currentMonthTests.length === 0 || previousMonthTests.length === 0) return null
+    
+    const currentAvg = currentMonthTests.reduce((sum, t) => sum + (t.score / t.maxScore) * 100, 0) / currentMonthTests.length
+    const previousAvg = previousMonthTests.reduce((sum, t) => sum + (t.score / t.maxScore) * 100, 0) / previousMonthTests.length
+    
+    if (currentAvg > previousAvg) return 'up'
+    if (currentAvg < previousAvg) return 'down'
+    return 'stable'
+  }
+
+  const trend = getPerformanceTrend()
 
   const strongestSkill = (studentProfile?.skills || []).reduce(
     (best, skill) => {
@@ -350,23 +463,6 @@ const StudentProfile = () => {
             label={approvalLabel}
             tone={approvalTone}
           />
-          <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-indigo-100">
-            <div className="inline-flex items-center gap-1">
-              <CalendarDaysIcon className="h-4 w-4" />
-              <span>
-                Last evaluated:{' '}
-                {lastEvaluationDate
-                  ? lastEvaluationDate.toLocaleDateString()
-                  : 'No evaluations yet'}
-              </span>
-            </div>
-            <div className="inline-flex items-center gap-1">
-              <ChartBarIcon className="h-4 w-4" />
-              <span>
-                Overall performance: <span className="font-semibold text-white">{overallPerformance}%</span>
-              </span>
-            </div>
-          </div>
           <button
             onClick={() => setEditing(!editing)}
             className="mt-1 inline-flex items-center rounded-full bg-white/95 text-primary-700 px-4 py-1.5 text-xs sm:text-sm font-semibold shadow hover:bg-white transition"
@@ -534,14 +630,7 @@ const StudentProfile = () => {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                <div className="flex items-center gap-4 md:justify-start justify-center">
-                  <AggregateRing value={studentProfile.aggregateScore || 0} />
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Aggregate Score</label>
-                    <p className="mt-1 text-sm text-gray-600">Overall performance across trainer evaluations.</p>
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Placement Status</label>
                   <div className="mt-1">
