@@ -589,9 +589,20 @@ router.get('/:id/students', authenticate, async (req, res, next) => {
       batch
     } = req.query;
 
+    const trainerObjectId = mongoose.Types.ObjectId.isValid(req.params.id)
+      ? new mongoose.Types.ObjectId(req.params.id)
+      : null;
+
+    if (!trainerObjectId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid trainer id'
+      });
+    }
+
     // Build query for students assigned to this trainer and approved
     const query = {
-      trainerId: req.params.id,
+      trainerId: trainerObjectId,
       approvalStatus: 'approved'
     };
 
@@ -605,12 +616,59 @@ router.get('/:id/students', authenticate, async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    const studentProfileIds = students.map((s) => s._id);
+
+    const avgScores = studentProfileIds.length > 0
+      ? await StudentEvaluation.aggregate([
+          {
+            $match: {
+              trainerId: trainerObjectId,
+              studentProfileId: { $in: studentProfileIds }
+            }
+          },
+          {
+            $addFields: {
+              percent: {
+                $cond: [
+                  { $gt: [{ $ifNull: ['$maxScore', 0] }, 0] },
+                  {
+                    $multiply: [
+                      { $divide: ['$score', { $ifNull: ['$maxScore', 0] }] },
+                      100
+                    ]
+                  },
+                  null
+                ]
+              }
+            }
+          },
+          {
+            $group: {
+              _id: '$studentProfileId',
+              avgScorePercentage: { $avg: '$percent' },
+              totalEvaluations: { $sum: 1 }
+            }
+          }
+        ])
+      : [];
+
+    const avgScoreMap = new Map(avgScores.map((r) => [String(r._id), r]));
+
+    const studentsWithAvg = students.map((student) => {
+      const stats = avgScoreMap.get(String(student._id));
+      const obj = student.toObject();
+      obj.avgScorePercentage = typeof stats?.avgScorePercentage === 'number'
+        ? Math.round(stats.avgScorePercentage * 10) / 10
+        : null;
+      return obj;
+    });
+
     const total = await StudentProfile.countDocuments(query);
 
     res.json({
       success: true,
       data: {
-        students,
+        students: studentsWithAvg,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),

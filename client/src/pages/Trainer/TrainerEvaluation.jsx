@@ -40,6 +40,13 @@ const TrainerEvaluation = () => {
     }
   }
 
+  const getScoreColorClass = (score) => {
+    if (score == null || Number.isNaN(score)) return 'text-gray-500'
+    if (score >= 70) return 'text-emerald-600'
+    if (score >= 40) return 'text-amber-600'
+    return 'text-red-600'
+  }
+
   const fetchEvaluationHistory = async (studentProfileId) => {
     try {
       setHistoryLoading(true)
@@ -206,7 +213,9 @@ const TrainerEvaluation = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{student.rollNo}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{student.batch}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{student.aggregateScore}%</td>
+                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${getScoreColorClass(student.avgScorePercentage)}`}>
+                          {student.avgScorePercentage == null ? '—' : `${Math.round(student.avgScorePercentage)}%`}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <button
                             onClick={() => handleSelectStudent(student)}
@@ -383,7 +392,8 @@ const TrainerEvaluation = () => {
                             <p className="text-xs text-gray-500">{evaluation.periodLabel}</p>
                           </div>
                           <span className="text-sm font-medium text-gray-900">
-                            {evaluation.score}/{evaluation.maxScore}
+                            {evaluation.score}/{evaluation.maxScore}{' '}
+                            ({Math.round((evaluation.score / evaluation.maxScore) * 100)}%)
                           </span>
                         </div>
                         {evaluation.notes && (
