@@ -127,6 +127,8 @@ export const trainersAPI = {
     api.get('/trainers/me/students/analytics', { params }),
   getRecentEvaluatedStudents: () =>
     api.get('/trainers/me/analytics/recent-students'),
+  getRecentEvaluations: (params) =>
+    api.get('/trainers/me/evaluations/recent', { params }),
 }
 
 // Notifications API

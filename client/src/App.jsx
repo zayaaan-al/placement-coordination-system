@@ -97,12 +97,12 @@ function App() {
               <StudentDetail />
             </ProtectedRoute>
           } />
-          <Route path="analytics" element={
+          <Route path="/analytics" element={
             <ProtectedRoute allowedRoles={['trainer', 'coordinator']}>
               <TrainerAnalytics />
             </ProtectedRoute>
           } />
-          <Route path="evaluations" element={
+          <Route path="/evaluations" element={
             <ProtectedRoute allowedRoles={['trainer']}>
               <TrainerEvaluation />
             </ProtectedRoute>

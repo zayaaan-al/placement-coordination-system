@@ -1,5 +1,6 @@
 const express = require('express');
 const Joi = require('joi');
+ const mongoose = require('mongoose');
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
 const TrainerEvaluation = require('../models/TrainerEvaluation');
@@ -242,12 +243,34 @@ router.post('/me/students/:studentProfileId/evaluations', authenticate, authoriz
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
+    // Also create TrainerEvaluation for analytics
+    if (evaluation) {
+      const trainerEvaluationData = {
+        trainerId: req.user._id,
+        studentId: studentProfile.userId,
+        evaluationDate: update.recordedDate,
+        overallRating: value.type === 'spring_meet' ? Math.round((value.score / maxScore) * 5) : null,
+        generalFeedback: value.notes,
+        technicalSkills: value.type === 'aptitude' ? Math.round((value.score / maxScore) * 5) : null,
+        communicationSkills: value.type === 'logical' ? Math.round((value.score / maxScore) * 5) : null,
+        problemSolving: value.type === 'machine' ? Math.round((value.score / maxScore) * 5) : null,
+        teamwork: value.type === 'spring_meet' ? Math.round((value.score / maxScore) * 5) : null,
+        punctuality: 5 // Default value
+      };
+
+      await TrainerEvaluation.create(trainerEvaluationData);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Evaluation recorded successfully',
       data: evaluation
     });
   } catch (error) {
+    console.error('=== EVALUATION SUBMIT ERROR ===');
+    console.error('Error details:', error);
+    console.error('Validation error:', error.details);
+    console.error('Error message:', error.message);
     next(error);
   }
 });
@@ -305,6 +328,26 @@ router.put('/me/evaluations/:evaluationId', authenticate, authorize('trainer'), 
     evaluation.lastUpdatedBy = req.user._id;
 
     await evaluation.save();
+
+    // Also update TrainerEvaluation for analytics
+    const trainerEvaluationUpdate = {
+      evaluationDate: evaluation.recordedDate,
+      overallRating: evaluation.type === 'spring_meet' ? Math.round((evaluation.score / evaluation.maxScore) * 5) : null,
+      generalFeedback: evaluation.notes,
+      technicalSkills: evaluation.type === 'aptitude' ? Math.round((evaluation.score / evaluation.maxScore) * 5) : null,
+      communicationSkills: evaluation.type === 'logical' ? Math.round((evaluation.score / evaluation.maxScore) * 5) : null,
+      problemSolving: evaluation.type === 'machine' ? Math.round((evaluation.score / evaluation.maxScore) * 5) : null,
+      teamwork: evaluation.type === 'spring_meet' ? Math.round((evaluation.score / evaluation.maxScore) * 5) : null
+    };
+
+    await TrainerEvaluation.findOneAndUpdate(
+      { 
+        trainerId: req.user._id,
+        studentId: evaluation.studentProfileId
+      },
+      { $set: trainerEvaluationUpdate },
+      { upsert: true }
+    );
 
     res.json({
       success: true,
@@ -603,21 +646,25 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
       });
     }
 
-    // Get evaluation statistics
-    const evaluationStatsArr = await TrainerEvaluation.aggregate([
-      { $match: { trainerId: req.params.id } },
+    const trainerObjectId = mongoose.Types.ObjectId.isValid(req.params.id)
+      ? new mongoose.Types.ObjectId(req.params.id)
+      : null;
+
+    if (!trainerObjectId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid trainer id'
+      });
+    }
+
+    // Get evaluation statistics from StudentEvaluation
+    const evaluationStatsArr = await StudentEvaluation.aggregate([
+      { $match: { trainerId: trainerObjectId } },
       {
         $group: {
           _id: null,
           totalEvaluations: { $sum: 1 },
-          avgOverallRating: { $avg: '$overallRating' },
-          avgTechnicalSkills: { $avg: '$technicalSkills' },
-          avgCommunication: { $avg: '$communicationSkills' },
-          avgProblemSolving: { $avg: '$problemSolving' },
-          avgTeamwork: { $avg: '$teamwork' },
-          avgPunctuality: { $avg: '$punctuality' },
-          // Convert 1-5 overall rating to a 0-100 score and average it
-          avgScorePercentage: { $avg: { $multiply: ['$overallRating', 20] } }
+          avgScorePercentage: { $avg: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } }
         }
       }
     ]);
@@ -632,18 +679,18 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
     const monthEnd = new Date(Date.UTC(currentYear, currentMonth + 1, 1, 0, 0, 0));
 
     const [evaluationsThisMonth, lastEvaluation] = await Promise.all([
-      TrainerEvaluation.countDocuments({
-        trainerId: req.params.id,
+      StudentEvaluation.countDocuments({
+        trainerId: trainerObjectId,
         createdAt: { $gte: monthStart, $lt: monthEnd }
       }),
-      TrainerEvaluation.findOne({ trainerId: req.params.id })
+      StudentEvaluation.findOne({ trainerId: trainerObjectId })
         .sort({ createdAt: -1 })
         .select('createdAt')
     ]);
 
     // Get monthly evaluation trend based on creation time
-    const monthlyTrend = await TrainerEvaluation.aggregate([
-      { $match: { trainerId: req.params.id } },
+    const monthlyTrend = await StudentEvaluation.aggregate([
+      { $match: { trainerId: trainerObjectId } },
       {
         $group: {
           _id: {
@@ -651,21 +698,20 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
             month: { $month: '$createdAt' }
           },
           count: { $sum: 1 },
-          avgRating: { $avg: '$overallRating' }
+          avgRating: { $avg: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } }
         }
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } },
       { $limit: 12 }
     ]);
 
-    // Get skill evaluation distribution
-    const skillStats = await TrainerEvaluation.aggregate([
-      { $match: { trainerId: req.params.id } },
-      { $unwind: '$skillsEvaluated' },
+    // Get skill evaluation distribution based on evaluation types
+    const skillStats = await StudentEvaluation.aggregate([
+      { $match: { trainerId: trainerObjectId } },
       {
         $group: {
-          _id: '$skillsEvaluated.skillName',
-          avgScore: { $avg: '$skillsEvaluated.score' },
+          _id: '$type',
+          avgScore: { $avg: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } },
           count: { $sum: 1 }
         }
       },
@@ -675,7 +721,7 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
 
     // Get students performance under this trainer
     const studentPerformance = await StudentProfile.aggregate([
-      { $match: { 'trainerRemarks.trainerId': req.params.id } },
+      { $match: { 'trainerRemarks.trainerId': trainerObjectId } },
       {
         $group: {
           _id: null,
@@ -695,9 +741,10 @@ router.get('/:id/analytics', authenticate, async (req, res, next) => {
       success: true,
       data: {
         evaluationStats: {
-          ...baseStats,
-          evaluationsThisMonth,
-          lastEvaluationAt: lastEvaluation ? lastEvaluation.createdAt : null
+          totalEvaluations: baseStats.totalEvaluations || 0,
+          avgScorePercentage: baseStats.avgScorePercentage || 0,
+          evaluationsThisMonth: evaluationsThisMonth || 0,
+          lastEvaluationAt: lastEvaluation?.createdAt || null
         },
         monthlyTrend,
         skillStats,
@@ -959,6 +1006,71 @@ router.get('/me/students/analytics', authenticate, authorize('trainer'), async (
           studentsBelowThreshold
         }
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @desc    Get trainer's recent evaluations
+ * @route   GET /api/v1/trainers/me/evaluations/recent
+ * @access  Private (Trainer)
+ */
+router.get('/me/evaluations/recent', authenticate, authorize('trainer'), async (req, res, next) => {
+  try {
+    const { limit = 5, month } = req.query;
+    
+    // Build query filter
+    const filter = { trainerId: req.user._id };
+    
+    // If month is specified as 'current', filter for current month using UTC
+    if (month === 'current') {
+      const now = new Date();
+      const year = now.getUTCFullYear();
+      const month = now.getUTCMonth();
+      
+      // Use UTC date range for accurate month filtering
+      const monthStart = new Date(Date.UTC(year, month, 1));
+      const monthEnd = new Date(Date.UTC(year, month + 1, 1));
+      
+      filter.createdAt = {
+        $gte: monthStart,
+        $lt: monthEnd
+      };
+    }
+    
+    const evaluations = await StudentEvaluation.find(filter)
+      .populate({
+        path: 'studentProfileId',
+        populate: {
+          path: 'userId',
+          select: 'name email'
+        }
+      })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+    
+    // Transform data to match expected format
+    const transformedEvaluations = evaluations.map(evaluation => ({
+      _id: evaluation._id,
+      type: evaluation.type,
+      score: evaluation.score,
+      maxScore: evaluation.maxScore,
+      notes: evaluation.notes,
+      createdAt: evaluation.createdAt,
+      evaluationDate: evaluation.recordedDate,
+      studentProfile: {
+        _id: evaluation.studentProfileId._id,
+        userId: evaluation.studentProfileId.userId,
+        rollNo: evaluation.studentProfileId.rollNo,
+        batch: evaluation.studentProfileId.batch
+      }
+    }));
+    
+    res.json({
+      success: true,
+      data: transformedEvaluations
     });
   } catch (error) {
     next(error);

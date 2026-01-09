@@ -9,9 +9,10 @@ import {
   AcademicCapIcon,
   TrophyIcon,
   ClockIcon,
-  StarIcon
+  StarIcon,
+  PlusCircleIcon
 } from '@heroicons/react/24/outline'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import LoadingSpinner from '../../components/UI/LoadingSpinner'
 
 const TrainerDashboard = () => {
@@ -22,6 +23,7 @@ const TrainerDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [pendingStudents, setPendingStudents] = useState([])
   const [recentStudents, setRecentStudents] = useState([])
+  const [recentEvaluations, setRecentEvaluations] = useState([])
   const [statsHighlight, setStatsHighlight] = useState(false)
   const [activityHighlight, setActivityHighlight] = useState(false)
 
@@ -39,11 +41,12 @@ const TrainerDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [studentsRes, analyticsRes, pendingRes, recentStudentsRes] = await Promise.all([
+      const [studentsRes, analyticsRes, pendingRes, recentStudentsRes, recentEvaluationsRes] = await Promise.all([
         trainersAPI.getTrainerStudents(user._id, { limit: 10 }),
         trainersAPI.getTrainerAnalytics(user._id),
         trainersAPI.getPendingStudents(),
-        trainersAPI.getRecentEvaluatedStudents()
+        trainersAPI.getRecentEvaluatedStudents(),
+        trainersAPI.getRecentEvaluations({ limit: 5, month: 'current' })
       ])
 
       if (studentsRes.data.success) {
@@ -60,6 +63,10 @@ const TrainerDashboard = () => {
 
       if (recentStudentsRes.data.success) {
         setRecentStudents(recentStudentsRes.data.data || [])
+      }
+
+      if (recentEvaluationsRes.data.success) {
+        setRecentEvaluations(recentEvaluationsRes.data.data || [])
       }
 
       // Calculate basic stats using real trainer evaluation analytics
@@ -200,25 +207,89 @@ const TrainerDashboard = () => {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Performance */}
+        {/* Monthly Evaluation Activity */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Monthly Evaluation Activity</h3>
+          
           {performanceData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={performanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="evaluations" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-64 text-gray-500">
-              <div className="text-center">
-                <ChartBarIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                <p>No evaluation data available</p>
+            <div className="space-y-4">
+              {/* Summary Stats */}
+              <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold text-gray-900">{evalStats.evaluationsThisMonth || performanceData.length}</span> evaluations this month
+                  <span className="mx-2">·</span>
+                  Avg score <span className="font-semibold text-gray-900">{evalStats.avgScorePercentage?.toFixed(1) || '0'}%</span>
+                </p>
               </div>
+
+              {/* Chart */}
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={performanceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fontSize: 12 }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12 }}
+                    label={{ value: 'Evaluations', angle: -90, position: 'insideLeft' }}
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload
+                        return (
+                          <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
+                            <p className="font-medium text-gray-900">{label}</p>
+                            <p className="text-sm text-gray-600">
+                              Total Evaluations: <span className="font-semibold text-gray-900">{data.evaluations}</span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Average Score: <span className="font-semibold text-gray-900">{data.avgRating?.toFixed(1) || 'N/A'}%</span>
+                            </p>
+                          </div>
+                        )
+                      }
+                      return null
+                    }}
+                  />
+                  <Bar 
+                    dataKey="evaluations" 
+                    fill="#3b82f6" 
+                    radius={[8, 8, 0, 0]}
+                    animationDuration={800}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* View All Link */}
+              <div className="pt-3 border-t border-gray-200">
+                <Link
+                  to="/evaluations"
+                  className="inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-500"
+                >
+                  View All Evaluations
+                  <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <ChartBarIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+              <p className="text-sm font-medium text-gray-900 mb-1">No evaluations recorded this month</p>
+              <p className="text-xs text-gray-500 text-center mb-4">
+                Start evaluating your students to see your monthly activity trends and insights.
+              </p>
+              <Link
+                to="/evaluations"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-full bg-primary-600 text-white hover:bg-primary-700 transition-colors"
+              >
+                <PlusCircleIcon className="h-4 w-4 mr-2" />
+                Start First Evaluation
+              </Link>
             </div>
           )}
         </div>
