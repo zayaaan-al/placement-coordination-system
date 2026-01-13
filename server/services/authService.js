@@ -56,6 +56,7 @@ class AuthService {
       email: email.toLowerCase(),
       passwordHash: password, // Will be hashed by pre-save middleware
       role,
+      program: role === 'trainer' ? (profileData.program || '') : undefined,
       trainerStatus: role === 'trainer' ? 'pending' : undefined,
       profile: profileData.profile || {}
     });

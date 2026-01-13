@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { FiAlertCircle, FiCalendar, FiUserCheck, FiTrendingUp, FiChevronRight } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import DashboardStats from './components/DashboardStats';
@@ -7,6 +7,9 @@ import TrainerApprovalList from './TrainerApprovalList';
 import CoordinatorLayout from './components/CoordinatorLayout';
 import TrainersList from './TrainersList';
 import TrainerProfile from './TrainerProfile';
+import StudentManagement from './StudentManagement';
+import PlacementRequests from './PlacementRequests';
+import JobManagement from './JobManagement';
 import { adminAPI } from '../../services/api';
 
 const formatRelativeTime = (dateLike) => {
@@ -85,7 +88,7 @@ const DashboardHome = () => {
         <UpcomingPlacements
           loading={loading}
           items={upcomingPlacements}
-          onViewAll={() => navigate('/job-management')}
+          onViewAll={() => navigate('/dashboard/job-management')}
         />
         <RecentActivities
           loading={loading}
@@ -216,8 +219,12 @@ const CoordinatorDashboard = () => {
     <CoordinatorLayout>
       <Routes>
         <Route path="/" element={<DashboardHome />} />
+        <Route path="students" element={<Navigate to="/dashboard/student-management" replace />} />
+        <Route path="student-management" element={<StudentManagement />} />
+        <Route path="job-management" element={<JobManagement />} />
         <Route path="trainers" element={<TrainersList />} />
         <Route path="trainers/:id" element={<TrainerProfile />} />
+        <Route path="placement-requests" element={<PlacementRequests />} />
         <Route path="approvals" element={<TrainerApprovalList />} />
         {/* Add more routes as needed */}
       </Routes>

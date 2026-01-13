@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { FiSearch, FiRefreshCcw, FiUserCheck, FiUserX } from 'react-icons/fi'
 import { AnimatePresence } from 'framer-motion'
 import api from '../../services/api'
 
 const TrainersList = () => {
-  const navigate = useNavigate()
   const [trainers, setTrainers] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [removingTrainerId, setRemovingTrainerId] = useState(null)
 
   useEffect(() => {
     fetchApprovedTrainers()
@@ -24,26 +24,44 @@ const TrainersList = () => {
       const raw = response.data?.data?.users || []
 
       const approved = raw
-        .filter(trainer => trainer.trainerStatus === 'approved')
+        .filter(trainer => trainer.trainerStatus === 'approved' && trainer.isActive !== false)
         .map(trainer => ({
           ...trainer,
           name: trainer.name || { first: 'Unknown', last: 'User' },
           email: trainer.email || 'No email provided',
-          specialization: trainer.specialization || 'Not specified',
-          experience: trainer.experience || '0',
+          program: trainer.program || trainer.specialization || 'Not assigned',
           joinDate: trainer.createdAt || new Date().toISOString(),
         }))
 
       setTrainers(approved)
     } catch (error) {
+      toast.error('Failed to fetch trainers')
       console.error('Error fetching approved trainers:', error)
     } finally {
       setLoading(false)
     }
   }
 
+  const handleRemoveTrainer = async (trainer) => {
+    const confirmRemove = window.confirm('Are you sure you want to remove this trainer?')
+    if (!confirmRemove) return
+
+    try {
+      setRemovingTrainerId(trainer._id)
+      await api.put(`/users/${trainer._id}/status`, { isActive: false })
+      toast.success('Trainer removed successfully')
+
+      setTrainers((prev) => prev.filter((t) => t._id !== trainer._id))
+    } catch (error) {
+      toast.error(error?.response?.data?.error || 'Failed to remove trainer')
+      console.error('Error removing trainer:', error)
+    } finally {
+      setRemovingTrainerId(null)
+    }
+  }
+
   const filtered = trainers.filter(trainer =>
-    `${trainer.name?.first} ${trainer.name?.last} ${trainer.email} ${trainer.specialization}`
+    `${trainer.name?.first} ${trainer.name?.last} ${trainer.email} ${trainer.program}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
   )
@@ -92,19 +110,13 @@ const TrainersList = () => {
                     <thead className="bg-gray-50">
                       <tr>
                         <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Trainer
-                        </th>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                           Email
                         </th>
                         <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                           Status
                         </th>
                         <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Specialization
-                        </th>
-                        <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          Experience
+                          Program
                         </th>
                         <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                           Joined On
@@ -116,23 +128,10 @@ const TrainersList = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                       {filtered.map((trainer) => {
-                        const initials = `${trainer.name?.first?.charAt(0) || 'U'}${trainer.name?.last?.charAt(0) || ''}`
                         const joinedOn = trainer.joinDate ? new Date(trainer.joinDate).toLocaleDateString() : '—'
 
                         return (
                           <tr key={trainer._id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-medium">
-                                  {initials}
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {trainer.name?.first} {trainer.name?.last}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {trainer.email}
                             </td>
@@ -143,20 +142,18 @@ const TrainersList = () => {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trainer.specialization || 'Not specified'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {trainer.experience} years
+                              {trainer.program || 'Not assigned'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {joinedOn}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                               <button
-                                className="text-blue-600 hover:text-blue-800 font-medium"
-                                onClick={() => navigate(`/dashboard/trainers/${trainer._id}`)}
+                                className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={() => handleRemoveTrainer(trainer)}
+                                disabled={removingTrainerId === trainer._id}
                               >
-                                View Profile
+                                {removingTrainerId === trainer._id ? 'Removing...' : 'Remove'}
                               </button>
                             </td>
                           </tr>

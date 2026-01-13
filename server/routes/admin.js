@@ -184,4 +184,40 @@ router.get('/dashboard-overview', authenticate, authorize(['admin', 'coordinator
   }
 });
 
+router.delete('/removed-trainers', authenticate, authorize(['admin', 'coordinator']), async (req, res, next) => {
+  try {
+    const dryRun = String(req.query.dryRun || 'true').toLowerCase() === 'true';
+
+    const query = {
+      role: 'trainer',
+      isActive: false,
+    };
+
+    const matchedCount = await User.countDocuments(query);
+
+    if (dryRun) {
+      return res.json({
+        success: true,
+        data: {
+          dryRun: true,
+          matchedCount,
+        },
+      });
+    }
+
+    const result = await User.deleteMany(query);
+
+    res.json({
+      success: true,
+      data: {
+        dryRun: false,
+        matchedCount,
+        deletedCount: result?.deletedCount || 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

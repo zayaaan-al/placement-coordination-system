@@ -26,11 +26,8 @@ import TrainerEvaluation from './pages/Trainer/TrainerEvaluation'
 
 // Coordinator pages
 import CoordinatorDashboard from './pages/Coordinator/CoordinatorDashboard'
-import StudentManagement from './pages/Coordinator/StudentManagement'
-import JobManagement from './pages/Coordinator/JobManagement'
 import CreateJob from './pages/Coordinator/CreateJob'
 import Reports from './pages/Coordinator/Reports'
-import PlacementRequests from './pages/Coordinator/PlacementRequests'
 
 // Shared pages
 import NotificationsPage from './pages/NotificationsPage'
@@ -61,7 +58,7 @@ function App() {
           <Route path="dashboard/*" element={
             user?.role === 'student' ? <StudentDashboard /> :
             user?.role === 'trainer' ? <TrainerDashboard /> :
-            user?.role === 'coordinator' ? <CoordinatorDashboard /> :
+            user?.role === 'coordinator' || user?.role === 'admin' ? <CoordinatorDashboard /> :
             <Navigate to="/login" replace />
           } />
 
@@ -112,12 +109,12 @@ function App() {
           {/* Coordinator routes */}
           <Route path="student-management" element={
             <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
-              <StudentManagement />
+              <Navigate to="/dashboard/student-management" replace />
             </ProtectedRoute>
           } />
           <Route path="job-management" element={
-            <ProtectedRoute allowedRoles={['coordinator']}>
-              <JobManagement />
+            <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
+              <Navigate to="/dashboard/job-management" replace />
             </ProtectedRoute>
           } />
           <Route path="jobs/create" element={
@@ -133,7 +130,7 @@ function App() {
 
           <Route path="placement-requests" element={
             <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
-              <PlacementRequests />
+              <Navigate to="/dashboard/placement-requests" replace />
             </ProtectedRoute>
           } />
 

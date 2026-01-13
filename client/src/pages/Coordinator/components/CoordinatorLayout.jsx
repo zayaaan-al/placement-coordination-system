@@ -15,9 +15,10 @@ import {
 
 const menuItems = [
   { name: 'Dashboard', icon: <FiHome />, path: '.', end: true },
-  { name: 'Students', icon: <FiUsers />, path: 'students' },
+  { name: 'Student Management', icon: <FiUsers />, path: 'student-management' },
   { name: 'Trainers', icon: <FiUsers />, path: 'trainers' },
-  { name: 'Placements', icon: <FiBriefcase />, path: 'placements' },
+  { name: 'Job Management', icon: <FiBriefcase />, path: 'job-management' },
+  { name: 'Placement Requests', icon: <FiCheckCircle />, path: 'placement-requests' },
   { name: 'Approvals', icon: <FiCheckCircle />, path: 'approvals' },
   { name: 'Notifications', icon: <FiBell />, path: 'notifications' },
   { name: 'Settings', icon: <FiSettings />, path: 'settings' },

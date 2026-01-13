@@ -196,7 +196,7 @@ router.get('/id/:id', authenticate, authorize(['trainer', 'coordinator']), async
  * @desc    Get all users with filtering
  * @access  Private (Coordinators only)
  */
-router.get('/', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.get('/', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     const {
       role,
@@ -250,7 +250,7 @@ router.get('/', authenticate, authorize(['coordinator']), async (req, res, next)
  * @desc    Update user status (activate/deactivate)
  * @access  Private (Coordinators only)
  */
-router.put('/:id/status', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.put('/:id/status', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     const { isActive } = req.body;
 

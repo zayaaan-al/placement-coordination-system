@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema({
     enum: ['student', 'trainer', 'coordinator'],
     required: true
   },
+  program: {
+    type: String,
+    trim: true
+  },
   trainerStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

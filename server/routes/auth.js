@@ -24,7 +24,7 @@ const registerSchema = Joi.object({
   // Student-specific fields (rollNo will be auto-generated if not provided)
   rollNo: Joi.string().trim().optional(),
   program: Joi.string().trim().when('role', {
-    is: 'student',
+    is: Joi.valid('student', 'trainer'),
     then: Joi.required(),
     otherwise: Joi.optional()
   }),

@@ -57,7 +57,7 @@ export default function DashboardStats({ stats, loading, error }) {
       icon: <FaUserGraduate className="text-3xl" />,
       color: 'bg-blue-100 text-blue-600',
       trend: percentChange == null ? '—' : `${percentChange >= 0 ? '+' : ''}${percentChange}% from last month`,
-      href: null,
+      href: '/dashboard/student-management',
     },
     {
       title: 'Active Trainers',
