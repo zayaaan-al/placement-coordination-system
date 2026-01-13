@@ -13,6 +13,7 @@ const jobRoutes = require('./routes/jobs');
 const notificationRoutes = require('./routes/notifications');
 const reportRoutes = require('./routes/reports');
 const placementRequestRoutes = require('./routes/placementRequests');
+const adminRoutes = require('./routes/admin');
 
 const errorHandler = require('./middleware/errorHandler');
 const User = require('./models/User');
@@ -83,6 +84,7 @@ app.use('/api/v1/jobs', jobRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/placement-requests', placementRequestRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {

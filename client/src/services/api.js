@@ -155,6 +155,11 @@ export const reportsAPI = {
   getDashboardSummary: () => api.get('/reports/dashboard-summary'),
 }
 
+// Admin/Coordinator Dashboard API
+export const adminAPI = {
+  getDashboardOverview: () => api.get('/admin/dashboard-overview'),
+}
+
 // Placement Requests API
 export const placementRequestsAPI = {
   create: (data) => api.post('/placement-requests', data),

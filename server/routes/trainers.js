@@ -610,11 +610,13 @@ router.get('/:id/students', authenticate, async (req, res, next) => {
 
     // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const students = await StudentProfile.find(query)
-      .populate('userId', 'name email profile')
+    const studentsRaw = await StudentProfile.find(query)
+      .populate('userId', 'name email profile isActive')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
+
+    const students = studentsRaw.filter((s) => s?.userId?.isActive !== false);
 
     const studentProfileIds = students.map((s) => s._id);
 

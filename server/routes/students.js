@@ -4,6 +4,7 @@ const StudentProfile = require('../models/StudentProfile');
 const TrainerEvaluation = require('../models/TrainerEvaluation');
 const StudentEvaluation = require('../models/StudentEvaluation');
 const User = require('../models/User');
+const PlacementRequest = require('../models/PlacementRequest');
 const Notification = require('../models/Notification');
 const { authenticate, authorize } = require('../middleware/auth');
 const { evaluationTypeOptions } = require('../utils/evaluationUtils');
@@ -22,6 +23,67 @@ const addTestSchema = Joi.object({
       marks: Joi.number().min(0).required()
     })
   ).optional()
+});
+
+/**
+ * @route   PUT /api/v1/students/:id/remove
+ * @desc    Soft remove (deactivate) a student account and remove from placement workflows
+ * @access  Private (Coordinators/Admin only)
+ */
+router.put('/:id/remove', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
+  try {
+    const schema = Joi.object({
+      remarks: Joi.string().trim().allow('', null).max(1000).optional(),
+    });
+
+    const { error, value } = schema.validate(req.body || {});
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: error.details[0].message,
+      });
+    }
+
+    const studentProfile = await StudentProfile.findById(req.params.id).populate('userId', 'name email isActive');
+    if (!studentProfile) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    const user = await User.findById(studentProfile.userId?._id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.isActive === false) {
+      return res.json({
+        success: true,
+        message: 'Student already inactive',
+        data: { studentProfileId: studentProfile._id, userId: user._id },
+      });
+    }
+
+    user.isActive = false;
+    await user.save();
+
+    studentProfile.placementStatus = 'removed';
+    studentProfile.placementEligible = false;
+    studentProfile.placementAdminRemarks = value.remarks || '';
+    studentProfile.placementReviewedAt = new Date();
+    await studentProfile.save();
+
+    await PlacementRequest.deleteMany({
+      studentProfileId: studentProfile._id,
+      status: 'pending',
+    });
+
+    res.json({
+      success: true,
+      message: 'Student removed successfully',
+      data: { studentProfileId: studentProfile._id, userId: user._id },
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 /**
@@ -46,9 +108,13 @@ router.put('/:id/place', authenticate, authorize(['coordinator', 'admin']), asyn
       });
     }
 
-    const student = await StudentProfile.findById(req.params.id).populate('userId', 'name email');
+    const student = await StudentProfile.findById(req.params.id).populate('userId', 'name email isActive');
     if (!student) {
       return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    if (student?.userId?.isActive === false) {
+      return res.status(400).json({ success: false, error: 'Student is inactive' });
     }
 
     if (student.placementStatus !== 'approved') {
@@ -99,9 +165,13 @@ router.put('/:id/remove-from-placement', authenticate, authorize(['coordinator',
       });
     }
 
-    const student = await StudentProfile.findById(req.params.id).populate('userId', 'name email');
+    const student = await StudentProfile.findById(req.params.id).populate('userId', 'name email isActive');
     if (!student) {
       return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    if (student?.userId?.isActive === false) {
+      return res.status(400).json({ success: false, error: 'Student is inactive' });
     }
 
     if (student.placementStatus === 'placed') {
@@ -543,7 +613,10 @@ router.get('/', authenticate, authorize(['trainer', 'coordinator', 'admin']), as
       placementStatus,
       placementEligible,
       minAggregateScore,
-      search
+      search,
+      loggedInOnly,
+      activeOnly,
+      includeInactive
     } = req.query;
 
     // Build query
@@ -567,14 +640,12 @@ router.get('/', authenticate, authorize(['trainer', 'coordinator', 'admin']), as
     if (placementEligible !== undefined) query.placementEligible = placementEligible === 'true';
     if (minAggregateScore) query.aggregateScore = { $gte: parseInt(minAggregateScore) };
 
-    // Execute query with pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    let studentsQuery = StudentProfile.find(query)
-      .populate('userId', 'name email profile isActive')
-      .populate('trainerRemarks.trainerId', 'name')
-      .sort({ aggregateScore: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    const shouldFilterLoggedIn = String(loggedInOnly) === 'true';
+    const shouldFilterActive = includeInactive === 'true'
+      ? false
+      : activeOnly !== undefined
+        ? String(activeOnly) === 'true'
+        : req.user.role !== 'admin';
 
     // Add search filter if provided
     if (search) {
@@ -584,12 +655,34 @@ router.get('/', authenticate, authorize(['trainer', 'coordinator', 'admin']), as
           { 'name.last': { $regex: search, $options: 'i' } },
           { email: { $regex: search, $options: 'i' } }
         ],
-        role: 'student'
+        role: 'student',
+        ...(shouldFilterActive ? { isActive: true } : {}),
+        ...(shouldFilterLoggedIn ? { lastLogin: { $ne: null } } : {}),
       }).select('_id');
       
       const userIds = users.map(user => user._id);
       query.userId = { $in: userIds };
     }
+
+    if (!search && (shouldFilterActive || shouldFilterLoggedIn)) {
+      const users = await User.find({
+        role: 'student',
+        ...(shouldFilterActive ? { isActive: true } : {}),
+        ...(shouldFilterLoggedIn ? { lastLogin: { $ne: null } } : {}),
+      }).select('_id');
+
+      const userIds = users.map((u) => u._id);
+      query.userId = { $in: userIds };
+    }
+
+    // Execute query with pagination (after all filters have been applied to `query`)
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const studentsQuery = StudentProfile.find(query)
+      .populate('userId', 'name email profile isActive lastLogin')
+      .populate('trainerRemarks.trainerId', 'name')
+      .sort({ aggregateScore: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
     const students = await studentsQuery;
     const total = await StudentProfile.countDocuments(query);
