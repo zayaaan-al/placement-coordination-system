@@ -171,20 +171,28 @@ const StudentDashboard = () => {
 
   const getStatusBadge = (status) => {
     const styles = {
+      not_requested: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800',
       not_approved: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800',
-      approved: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800',
+      pending: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800',
+      approved: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800',
+      rejected: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800',
       shortlisted: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800',
-      placed: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800'
+      placed: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800',
+      removed: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'
     }
     return styles[status] || 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800'
   }
 
   const getStatusText = (status) => {
     const texts = {
+      not_requested: 'Not Requested',
       not_approved: 'Pending Approval',
-      approved: 'Approved',
+      pending: 'Pending Review',
+      approved: 'Ready for Placement',
+      rejected: 'Rejected',
       shortlisted: 'Shortlisted',
-      placed: 'Placed'
+      placed: 'Placed',
+      removed: 'Removed from Placement'
     }
     return texts[status] || status
   }

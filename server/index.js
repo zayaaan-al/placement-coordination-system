@@ -12,6 +12,7 @@ const trainerRoutes = require('./routes/trainers');
 const jobRoutes = require('./routes/jobs');
 const notificationRoutes = require('./routes/notifications');
 const reportRoutes = require('./routes/reports');
+const placementRequestRoutes = require('./routes/placementRequests');
 
 const errorHandler = require('./middleware/errorHandler');
 const User = require('./models/User');
@@ -81,6 +82,7 @@ app.use('/api/v1/trainers', trainerRoutes);
 app.use('/api/v1/jobs', jobRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/placement-requests', placementRequestRoutes);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {

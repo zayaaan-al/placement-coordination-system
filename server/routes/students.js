@@ -24,6 +24,109 @@ const addTestSchema = Joi.object({
   ).optional()
 });
 
+/**
+ * @route   PUT /api/v1/students/:id/place
+ * @desc    Mark a student as placed and store placement details
+ * @access  Private (Coordinators/Admin only)
+ */
+router.put('/:id/place', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
+  try {
+    const schema = Joi.object({
+      company: Joi.string().trim().allow('', null).max(200).optional(),
+      role: Joi.string().trim().allow('', null).max(200).optional(),
+      package: Joi.number().min(0).allow(null).optional(),
+      date: Joi.date().allow(null).optional(),
+    });
+
+    const { error, value } = schema.validate(req.body || {});
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: error.details[0].message,
+      });
+    }
+
+    const student = await StudentProfile.findById(req.params.id).populate('userId', 'name email');
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    if (student.placementStatus !== 'approved') {
+      return res.status(400).json({
+        success: false,
+        error: 'Only approved students can be placed',
+      });
+    }
+
+    student.placementStatus = 'placed';
+    student.placementEligible = true;
+    student.placementDetails = {
+      ...(student.placementDetails || {}),
+      company: value.company || '',
+      position: value.role || '',
+      salary: value.package ?? null,
+      placedDate: value.date ?? new Date(),
+    };
+
+    await student.save();
+
+    res.json({
+      success: true,
+      message: 'Student marked as placed',
+      data: student,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PUT /api/v1/students/:id/remove-from-placement
+ * @desc    Remove a student from placement (mark as removed)
+ * @access  Private (Coordinators/Admin only)
+ */
+router.put('/:id/remove-from-placement', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
+  try {
+    const schema = Joi.object({
+      remarks: Joi.string().trim().allow('', null).max(1000).optional(),
+    });
+
+    const { error, value } = schema.validate(req.body || {});
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: error.details[0].message,
+      });
+    }
+
+    const student = await StudentProfile.findById(req.params.id).populate('userId', 'name email');
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    if (student.placementStatus === 'placed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Placed students cannot be removed from placement',
+      });
+    }
+
+    student.placementStatus = 'removed';
+    student.placementEligible = false;
+    student.placementAdminRemarks = value.remarks || '';
+    student.placementReviewedAt = new Date();
+    await student.save();
+
+    res.json({
+      success: true,
+      message: 'Student removed from placement',
+      data: student,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 const addEvaluationSchema = Joi.object({
   skillsEvaluated: Joi.array().items(
     Joi.object({
@@ -429,7 +532,7 @@ router.get('/me/performance/alerts', authenticate, authorize(['student']), async
  * @desc    Get all students with filtering and pagination
  * @access  Private (Trainers and Coordinators)
  */
-router.get('/', authenticate, authorize(['trainer', 'coordinator']), async (req, res, next) => {
+router.get('/', authenticate, authorize(['trainer', 'coordinator', 'admin']), async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -453,7 +556,14 @@ router.get('/', authenticate, authorize(['trainer', 'coordinator']), async (req,
     
     if (batch) query.batch = batch;
     if (program) query.program = program;
-    if (placementStatus) query.placementStatus = placementStatus;
+    if (placementStatus) {
+      const statuses = String(placementStatus)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (statuses.length > 1) query.placementStatus = { $in: statuses };
+      else if (statuses.length === 1) query.placementStatus = statuses[0];
+    }
     if (placementEligible !== undefined) query.placementEligible = placementEligible === 'true';
     if (minAggregateScore) query.aggregateScore = { $gte: parseInt(minAggregateScore) };
 
@@ -484,10 +594,54 @@ router.get('/', authenticate, authorize(['trainer', 'coordinator']), async (req,
     const students = await studentsQuery;
     const total = await StudentProfile.countDocuments(query);
 
+    const studentProfileIds = students.map((s) => s._id).filter(Boolean);
+    let overallScoreByProfileId = {};
+
+    if (studentProfileIds.length > 0) {
+      const rows = await StudentEvaluation.aggregate([
+        {
+          $match: {
+            studentProfileId: { $in: studentProfileIds },
+          },
+        },
+        {
+          $group: {
+            _id: '$studentProfileId',
+            overallScore: {
+              $avg: {
+                $cond: [
+                  { $gt: ['$maxScore', 0] },
+                  { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] },
+                  null,
+                ],
+              },
+            },
+          },
+        },
+      ]);
+
+      overallScoreByProfileId = rows.reduce((acc, row) => {
+        if (row?._id) {
+          acc[String(row._id)] = typeof row.overallScore === 'number' ? row.overallScore : null;
+        }
+        return acc;
+      }, {});
+    }
+
+    const studentsWithOverallScore = students.map((s) => {
+      const computedOverallScore = overallScoreByProfileId[String(s._id)];
+      const fallbackAggregate = typeof s.aggregateScore === 'number' ? s.aggregateScore : null;
+      const overallScore = typeof computedOverallScore === 'number' ? computedOverallScore : fallbackAggregate;
+      return {
+        ...s.toObject(),
+        overallScore,
+      };
+    });
+
     res.json({
       success: true,
       data: {
-        students,
+        students: studentsWithOverallScore,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -719,7 +873,7 @@ router.post('/:id/remarks', authenticate, authorize(['trainer']), async (req, re
  * @desc    Approve/disapprove student for placement
  * @access  Private (Coordinators only)
  */
-router.put('/:id/approve', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.put('/:id/approve', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     // Validate request body
     const { error, value } = approveStudentSchema.validate(req.body);
@@ -781,7 +935,7 @@ router.put('/:id/approve', authenticate, authorize(['coordinator']), async (req,
  * @desc    Get students overview statistics
  * @access  Private (Coordinators only)
  */
-router.get('/stats/overview', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.get('/stats/overview', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     const stats = await StudentProfile.aggregate([
       {

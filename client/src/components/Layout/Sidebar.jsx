@@ -39,6 +39,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
       coordinator: [
         { name: 'Student Management', href: '/student-management', icon: UserGroupIcon },
         { name: 'Job Management', href: '/job-management', icon: BriefcaseIcon },
+        { name: 'Placement Requests', href: '/placement-requests', icon: DocumentTextIcon },
+        { name: 'Reports', href: '/reports', icon: DocumentTextIcon },
+      ],
+      admin: [
+        { name: 'Student Management', href: '/student-management', icon: UserGroupIcon },
+        { name: 'Job Management', href: '/job-management', icon: BriefcaseIcon },
+        { name: 'Placement Requests', href: '/placement-requests', icon: DocumentTextIcon },
         { name: 'Reports', href: '/reports', icon: DocumentTextIcon },
       ]
     }

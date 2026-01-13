@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
-import { trainersAPI } from '../../services/api'
+import { placementRequestsAPI, trainersAPI } from '../../services/api'
 import LoadingSpinner from '../../components/UI/LoadingSpinner'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 
@@ -36,18 +36,50 @@ const StudentList = () => {
     }
   }, [user])
 
+  const refreshStudents = async () => {
+    const res = await trainersAPI.getTrainerStudents(user._id, { limit: 100 })
+    if (res.data.success) {
+      setStudents(res.data.data.students || [])
+    }
+  }
+
+  const handleUnmoveFromPlacement = async (student) => {
+    try {
+      const ok = window.confirm('Cancel this placement request? This will remove it from the admin list and reset the student placement status.')
+      if (!ok) return
+
+      await placementRequestsAPI.cancel(student._id)
+      toast.success('Placement request cancelled')
+      await refreshStudents()
+    } catch (error) {
+      console.error('Error cancelling placement request:', error)
+      toast.error(error?.response?.data?.error || 'Failed to cancel placement request')
+    }
+  }
+
   const handleRemoveStudent = async (studentProfileId) => {
     try {
       await trainersAPI.updateStudentApproval(studentProfileId, 'rejected')
       toast.success('Student removed from your list')
 
-      const res = await trainersAPI.getTrainerStudents(user._id, { limit: 100 })
-      if (res.data.success) {
-        setStudents(res.data.data.students || [])
-      }
+      await refreshStudents()
     } catch (error) {
       console.error('Error removing student:', error)
       toast.error('Failed to remove student')
+    }
+  }
+
+  const handleMoveToPlacement = async (student) => {
+    try {
+      const ok = window.confirm('Move this student to placement workflow? This will create a pending request for admin approval.')
+      if (!ok) return
+
+      await placementRequestsAPI.create({ studentProfileId: student._id })
+      toast.success('Placement request created (pending approval)')
+      await refreshStudents()
+    } catch (error) {
+      console.error('Error creating placement request:', error)
+      toast.error(error?.response?.data?.error || 'Failed to create placement request')
     }
   }
 
@@ -107,6 +139,25 @@ const StudentList = () => {
                       {student.avgScorePercentage == null ? '—' : `${Math.round(student.avgScorePercentage)}%`}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {student.placementStatus === 'pending' ? (
+                        <button
+                          onClick={() => handleUnmoveFromPlacement(student)}
+                          className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 mr-2"
+                        >
+                          Unmove from Placement
+                        </button>
+                      ) : student.placementStatus === 'approved' || student.placementStatus === 'rejected' || student.placementStatus === 'placed' ? (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200 mr-2">
+                          {student.placementStatus}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleMoveToPlacement(student)}
+                          className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 mr-2"
+                        >
+                          Move to Placement
+                        </button>
+                      )}
                       <button
                         onClick={() => handleRemoveStudent(student._id)}
                         className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"

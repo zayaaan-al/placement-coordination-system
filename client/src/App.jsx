@@ -30,6 +30,7 @@ import StudentManagement from './pages/Coordinator/StudentManagement'
 import JobManagement from './pages/Coordinator/JobManagement'
 import CreateJob from './pages/Coordinator/CreateJob'
 import Reports from './pages/Coordinator/Reports'
+import PlacementRequests from './pages/Coordinator/PlacementRequests'
 
 // Shared pages
 import NotificationsPage from './pages/NotificationsPage'
@@ -110,7 +111,7 @@ function App() {
 
           {/* Coordinator routes */}
           <Route path="student-management" element={
-            <ProtectedRoute allowedRoles={['coordinator']}>
+            <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
               <StudentManagement />
             </ProtectedRoute>
           } />
@@ -127,6 +128,12 @@ function App() {
           <Route path="reports" element={
             <ProtectedRoute allowedRoles={['coordinator']}>
               <Reports />
+            </ProtectedRoute>
+          } />
+
+          <Route path="placement-requests" element={
+            <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
+              <PlacementRequests />
             </ProtectedRoute>
           } />
 

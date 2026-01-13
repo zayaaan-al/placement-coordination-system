@@ -59,12 +59,21 @@ const studentProfileSchema = new mongoose.Schema({
   }],
   placementStatus: {
     type: String,
-    enum: ['not_approved', 'approved', 'shortlisted', 'placed'],
-    default: 'not_approved'
+    enum: ['not_requested', 'not_approved', 'pending', 'approved', 'rejected', 'shortlisted', 'placed', 'removed'],
+    default: 'not_requested'
   },
   placementEligible: {
     type: Boolean,
     default: false
+  },
+  placementAdminRemarks: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  placementReviewedAt: {
+    type: Date,
+    default: null
   },
   aggregateScore: {
     type: Number,
@@ -116,7 +125,7 @@ studentProfileSchema.methods.calculateAggregateScore = function() {
   this.aggregateScore = Math.round((testScore * 0.7) + (trainerScore * 0.3));
   
   // Update placement eligibility
-  this.placementEligible = this.aggregateScore >= 60 && this.placementStatus === 'approved';
+  this.placementEligible = this.placementStatus === 'approved' || this.placementStatus === 'placed';
   
   return this.aggregateScore;
 };

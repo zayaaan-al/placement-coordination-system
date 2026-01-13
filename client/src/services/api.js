@@ -89,6 +89,8 @@ export const studentsAPI = {
   addEvaluation: (id, data) => api.post(`/students/${id}/evaluations`, data),
   addRemark: (id, data) => api.post(`/students/${id}/remarks`, data),
   approveStudent: (id, data) => api.put(`/students/${id}/approve`, data),
+  placeStudent: (id, data) => api.put(`/students/${id}/place`, data),
+  removeFromPlacement: (id, data) => api.put(`/students/${id}/remove-from-placement`, data),
   getStats: () => api.get('/students/stats/overview'),
   getMyPerformance: () => api.get('/students/me/performance'),
   getMyPerformanceLatest: () => api.get('/students/me/performance/latest'),
@@ -151,6 +153,15 @@ export const reportsAPI = {
     responseType: 'blob'
   }),
   getDashboardSummary: () => api.get('/reports/dashboard-summary'),
+}
+
+// Placement Requests API
+export const placementRequestsAPI = {
+  create: (data) => api.post('/placement-requests', data),
+  list: (params) => api.get('/placement-requests', { params }),
+  approve: (id, data) => api.put(`/placement-requests/${id}/approve`, data),
+  reject: (id, data) => api.put(`/placement-requests/${id}/reject`, data),
+  cancel: (studentProfileId) => api.delete(`/placement-requests/${studentProfileId}/cancel`),
 }
 
 // Error handler utility

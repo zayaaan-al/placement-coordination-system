@@ -404,11 +404,25 @@ const StudentProfile = () => {
 
   const placementTone = placementStatus === 'approved' || placementStatus === 'placed'
     ? 'success'
+    : placementStatus === 'pending'
+      ? 'warning'
+      : placementStatus === 'rejected' || placementStatus === 'removed'
+        ? 'danger'
     : placementStatus === 'shortlisted'
       ? 'warning'
-      : placementStatus
+      : placementStatus 
         ? 'neutral'
         : 'neutral'
+
+  const placementStatusLabel = placementStatus === 'approved'
+    ? 'Ready for Placement'
+    : placementStatus === 'placed'
+      ? 'Placed'
+      : placementStatus === 'removed'
+        ? 'Removed from Placement'
+        : placementStatus
+          ? placementStatus.replace('_', ' ')
+          : 'Not set'
 
   const eligibleTone = placementEligible == null
     ? 'neutral'
@@ -635,7 +649,7 @@ const StudentProfile = () => {
                   <label className="text-sm font-medium text-gray-500">Placement Status</label>
                   <div className="mt-1">
                     <StatusPill
-                      label={placementStatus ? placementStatus.replace('_', ' ') : 'Not set'}
+                      label={placementStatusLabel}
                       tone={placementTone}
                     />
                   </div>
@@ -648,6 +662,46 @@ const StudentProfile = () => {
                       tone={eligibleTone}
                     />
                   </div>
+                </div>
+              </div>
+
+              {(placementStatus === 'rejected' || placementStatus === 'removed') && studentProfile?.placementAdminRemarks && (
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-gray-500">Admin Remarks</label>
+                  <p className="mt-1 text-sm text-gray-900">{studentProfile.placementAdminRemarks}</p>
+                </div>
+              )}
+
+              {placementStatus === 'removed' && studentProfile?.placementReviewedAt && (
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-gray-500">Reviewed Date</label>
+                  <p className="mt-1 text-sm text-gray-900">{new Date(studentProfile.placementReviewedAt).toLocaleDateString()}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {studentProfile && placementStatus === 'placed' && (
+            <div className="card bg-white/90 border border-gray-200 shadow-sm transition-transform transition-shadow duration-200 hover:-translate-y-0.5 hover:shadow-md px-4 sm:px-5 py-4 sm:py-5">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Placement Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Company</label>
+                  <p className="text-gray-900">{studentProfile?.placementDetails?.company || '—'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Role</label>
+                  <p className="text-gray-900">{studentProfile?.placementDetails?.position || '—'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Package</label>
+                  <p className="text-gray-900">{studentProfile?.placementDetails?.salary == null ? '—' : studentProfile.placementDetails.salary}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Date</label>
+                  <p className="text-gray-900">
+                    {studentProfile?.placementDetails?.placedDate ? new Date(studentProfile.placementDetails.placedDate).toLocaleDateString() : '—'}
+                  </p>
                 </div>
               </div>
             </div>
