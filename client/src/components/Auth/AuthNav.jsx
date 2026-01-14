@@ -15,8 +15,7 @@ const AuthNav = () => {
       </Link>
 
       <nav className="flex items-center space-x-4 text-xs sm:text-sm text-gray-600">
-        <Link to="/about" className="hover:text-blue-600 transition-colors hidden sm:inline">About</Link>
-        <Link to="/contact" className="hover:text-blue-600 transition-colors hidden sm:inline">Contact</Link>
+        <Link to="/" className="hover:text-blue-600 transition-colors">Home</Link>
       </nav>
     </header>
   )
