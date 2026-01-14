@@ -179,7 +179,7 @@ const JobDetails = () => {
 
           <button
             onClick={onDeleteJob}
-            disabled={deleting || !job.isActive}
+            disabled={deleting || !job.isActive || job.status !== 'draft'}
             className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FiTrash2 className="mr-2" />

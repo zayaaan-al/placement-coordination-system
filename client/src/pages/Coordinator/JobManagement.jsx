@@ -234,7 +234,7 @@ const JobManagement = () => {
 
                             <button
                               onClick={() => onDelete(job)}
-                              disabled={isBusy || job.isActive === false}
+                              disabled={isBusy || job.isActive === false || job.status !== 'draft'}
                               className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <FiTrash2 className="w-4 h-4 mr-1" />
