@@ -217,7 +217,7 @@ const LandingPage = () => {
                   </Link>
                 </div>
               </div>
-              <div className="absolute -inset-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-3xl blur-xl opacity-70"></div>
+              <div className="pointer-events-none absolute -inset-4 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-3xl blur-xl opacity-70"></div>
             </div>
           </div>
         </div>
