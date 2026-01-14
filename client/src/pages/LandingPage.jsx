@@ -248,7 +248,7 @@ const LandingPage = () => {
             </div>
             <div className="pt-8 border-t border-gray-700">
               <p className="text-gray-500 text-sm">
-                © 2024 PlacementPro. Built with React, Node.js, and modern web technologies.
+                © 2026 PlacementPro. Built with React, Node.js, and modern web technologies.
               </p>
             </div>
           </div>
