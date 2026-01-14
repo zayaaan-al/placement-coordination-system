@@ -214,13 +214,13 @@ const RegisterPage = () => {
                         className="block w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm sm:text-base bg-white"
                       >
                         <option value="">Select Program</option>
-                        <option value="MERN Stack Development">mernstack developement</option>
-                        <option value="Python Full Stack Development">python fulll stack developement</option>
-                        <option value="Digital Marketing">digital marketing</option>
-                        <option value="Flutter Development">flutter developement</option>
-                        <option value="Data Analytics">data analytics</option>
-                        <option value="Data Science">data science</option>
-                        <option value="UI/UX Designing">UI/UX designing</option>
+                        <option value="MERN Stack Development">MERN Stack Development</option>
+                        <option value="Python Full Stack Development">Python Full Stack Development</option>
+                        <option value="Digital Marketing">Digital Marketing</option>
+                        <option value="Flutter Development">Flutter Development</option>
+                        <option value="Data Analytics">Data Analytics</option>
+                        <option value="Data Science">Data Science</option>
+                        <option value="UI/UX Designing">UI/UX Designing</option>
                       </select>
                       {errors.program && (
                         <p className="text-sm text-red-600 mt-2">{errors.program.message}</p>
@@ -295,13 +295,13 @@ const RegisterPage = () => {
                       className="block w-full px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-lg sm:rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm sm:text-base bg-white"
                     >
                       <option value="">Select Program</option>
-                      <option value="MERN Stack Development">mernstack developement</option>
-                      <option value="Python Full Stack Development">python fulll stack developement</option>
-                      <option value="Digital Marketing">digital marketing</option>
-                      <option value="Flutter Development">flutter developement</option>
-                      <option value="Data Analytics">data analytics</option>
-                      <option value="Data Science">data science</option>
-                      <option value="UI/UX Designing">UI/UX designing</option>
+                      <option value="MERN Stack Development">MERN Stack Development</option>
+                      <option value="Python Full Stack Development">Python Full Stack Development</option>
+                      <option value="Digital Marketing">Digital Marketing</option>
+                      <option value="Flutter Development">Flutter Development</option>
+                      <option value="Data Analytics">Data Analytics</option>
+                      <option value="Data Science">Data Science</option>
+                      <option value="UI/UX Designing">UI/UX Designing</option>
                     </select>
                     {errors.program && (
                       <p className="text-sm text-red-600 mt-2">{errors.program.message}</p>
