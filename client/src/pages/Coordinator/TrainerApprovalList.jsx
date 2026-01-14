@@ -11,7 +11,6 @@ import {
   FiChevronLeft,
   FiChevronRight
 } from 'react-icons/fi';
-import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
 
 const statusMap = {
@@ -48,6 +47,7 @@ const TrainerApprovalList = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [removingTrainerId, setRemovingTrainerId] = useState(null);
   const itemsPerPage = 8;
 
   useEffect(() => {
@@ -70,8 +70,7 @@ const TrainerApprovalList = () => {
           ...trainer,
           name: trainer.name || { first: 'Unknown', last: 'User' },
           email: trainer.email || 'No email provided',
-          specialization: trainer.specialization || 'Not specified',
-          experience: trainer.experience || '0',
+          program: trainer.program || trainer.specialization || 'Not specified',
           joinDate: trainer.createdAt || new Date().toISOString()
         };
 
@@ -100,8 +99,25 @@ const TrainerApprovalList = () => {
     }
   };
 
+  const handleRemoveTrainer = async (trainer) => {
+    const confirmRemove = window.confirm('Are you sure you want to remove this trainer?')
+    if (!confirmRemove) return
+
+    try {
+      setRemovingTrainerId(trainer._id)
+      await api.put(`/users/${trainer._id}/status`, { isActive: false })
+      toast.success('Trainer removed successfully')
+      await fetchTrainers()
+    } catch (error) {
+      toast.error(error?.response?.data?.error || 'Failed to remove trainer')
+      console.error('Error removing trainer:', error)
+    } finally {
+      setRemovingTrainerId(null)
+    }
+  }
+
   const filteredTrainers = trainers[activeTab]?.filter(trainer => 
-    `${trainer.name?.first} ${trainer.name?.last} ${trainer.email} ${trainer.specialization}`
+    `${trainer.name?.first} ${trainer.name?.last} ${trainer.email} ${trainer.program}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
   ) || [];
@@ -117,74 +133,6 @@ const TrainerApprovalList = () => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  const renderTrainerCard = (trainer) => (
-    <motion.div 
-      key={trainer._id}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -10 }}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
-    >
-      <div className="p-5">
-        <div className="flex items-start space-x-4">
-          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-medium text-lg">
-            {trainer.name?.first?.charAt(0)}{trainer.name?.last?.charAt(0) || 'U'}
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-gray-900">
-              {trainer.name?.first} {trainer.name?.last}
-            </h3>
-            <p className="text-sm text-gray-500">{trainer.email}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                statusMap[trainer.trainerStatus]?.bg
-              } ${statusMap[trainer.trainerStatus]?.textColor} ${
-                statusMap[trainer.trainerStatus]?.borderColor
-              } border`}>
-                {statusMap[trainer.trainerStatus]?.icon}
-                {statusMap[trainer.trainerStatus]?.text}
-              </span>
-              <span className="text-xs text-gray-500">•</span>
-              <span className="text-xs text-gray-500">{trainer.specialization}</span>
-              <span className="text-xs text-gray-500">•</span>
-              <span className="text-xs text-gray-500">{trainer.experience} years exp</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-3 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-500">
-              Joined {new Date(trainer.joinDate).toLocaleDateString()}
-            </span>
-            <button className="text-blue-600 hover:text-blue-800 font-medium">
-              View Profile
-            </button>
-          </div>
-
-          {trainer.trainerStatus === 'pending' && (
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleStatusUpdate(trainer._id, 'approved')}
-                className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors"
-              >
-                <FiCheck className="w-4 h-4 mr-1" />
-                Approve
-              </button>
-              <button
-                onClick={() => handleStatusUpdate(trainer._id, 'rejected')}
-                className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-medium border border-red-200 hover:bg-red-100 transition-colors"
-              >
-                <FiX className="w-4 h-4 mr-1" />
-                Reject
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
 
   return (
     <div className="space-y-6">
@@ -259,32 +207,107 @@ const TrainerApprovalList = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <AnimatePresence>
-              {currentItems.length > 0 ? (
-                currentItems.map(renderTrainerCard)
-              ) : (
-                <div className="col-span-full text-center py-12">
-                  <div className="mx-auto w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                    <FiUserX className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900">No {activeTab} trainers found</h3>
-                  <p className="mt-1 text-gray-500">
-                    {searchQuery 
-                      ? 'No trainers match your search criteria.' 
-                      : `There are currently no ${activeTab} trainers.`}
-                  </p>
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Clear search
-                    </button>
-                  )}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            {currentItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Trainer Name
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Program
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Joined On
+                      </th>
+                      <th scope="col" className="sticky top-0 z-10 bg-gray-50 px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {currentItems.map((trainer) => {
+                      const status = statusMap[trainer.trainerStatus] || statusMap.pending
+                      const joinedOn = trainer.joinDate ? new Date(trainer.joinDate).toLocaleDateString() : '—'
+                      const name = `${trainer.name?.first || ''} ${trainer.name?.last || ''}`.trim() || '—'
+
+                      return (
+                        <tr key={trainer._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trainer.email}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{trainer.program || '—'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.textColor} ${status.borderColor} border`}>
+                              {status.icon}
+                              {status.text}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{joinedOn}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                            {trainer.trainerStatus === 'pending' ? (
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => handleStatusUpdate(trainer._id, 'approved')}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                  <FiCheck className="w-4 h-4 mr-1" />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleStatusUpdate(trainer._id, 'rejected')}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                                >
+                                  <FiX className="w-4 h-4 mr-1" />
+                                  Reject
+                                </button>
+                              </div>
+                            ) : trainer.trainerStatus === 'approved' ? (
+                              <button
+                                className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={() => handleRemoveTrainer(trainer)}
+                                disabled={removingTrainerId === trainer._id}
+                              >
+                                {removingTrainerId === trainer._id ? 'Removing...' : 'Remove'}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-500">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="mx-auto w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <FiUserX className="w-8 h-8 text-gray-400" />
                 </div>
-              )}
-            </AnimatePresence>
+                <h3 className="text-lg font-medium text-gray-900">No {activeTab} trainers found</h3>
+                <p className="mt-1 text-gray-500">
+                  {searchQuery 
+                    ? 'No trainers match your search criteria.' 
+                    : `There are currently no ${activeTab} trainers.`}
+                </p>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Pagination */}
