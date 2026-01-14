@@ -106,6 +106,7 @@ export const jobsAPI = {
   getMatches: (id, params) => api.get(`/jobs/${id}/matches`, { params }),
   shortlistStudents: (id, data) => api.post(`/jobs/${id}/shortlist`, data),
   closeJob: (id) => api.put(`/jobs/${id}/close`),
+  deleteJob: (id) => api.delete(`/jobs/${id}`),
   applyForJob: (id) => api.post(`/jobs/${id}/apply`),
   explainMatch: (jobId, studentId) => api.get(`/jobs/${jobId}/explain/${studentId}`),
 }

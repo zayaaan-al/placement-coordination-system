@@ -10,6 +10,9 @@ import TrainerProfile from './TrainerProfile';
 import StudentManagement from './StudentManagement';
 import PlacementRequests from './PlacementRequests';
 import JobManagement from './JobManagement';
+import JobDetails from './JobDetails';
+import EditJob from './EditJob';
+import CreateJob from './CreateJob';
 import { adminAPI } from '../../services/api';
 
 const formatRelativeTime = (dateLike) => {
@@ -222,6 +225,9 @@ const CoordinatorDashboard = () => {
         <Route path="students" element={<Navigate to="/dashboard/student-management" replace />} />
         <Route path="student-management" element={<StudentManagement />} />
         <Route path="job-management" element={<JobManagement />} />
+        <Route path="job-management/create" element={<CreateJob />} />
+        <Route path="job-management/:jobId" element={<JobDetails />} />
+        <Route path="job-management/:jobId/edit" element={<EditJob />} />
         <Route path="trainers" element={<TrainersList />} />
         <Route path="trainers/:id" element={<TrainerProfile />} />
         <Route path="placement-requests" element={<PlacementRequests />} />

@@ -26,7 +26,6 @@ import TrainerEvaluation from './pages/Trainer/TrainerEvaluation'
 
 // Coordinator pages
 import CoordinatorDashboard from './pages/Coordinator/CoordinatorDashboard'
-import CreateJob from './pages/Coordinator/CreateJob'
 
 // Shared pages
 import NotFoundPage from './pages/NotFoundPage'
@@ -118,8 +117,8 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="jobs/create" element={
-            <ProtectedRoute allowedRoles={['coordinator']}>
-              <CreateJob />
+            <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
+              <Navigate to="/dashboard/job-management/create" replace />
             </ProtectedRoute>
           } />
           <Route path="reports" element={

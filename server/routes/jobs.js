@@ -41,6 +41,7 @@ const createJobSchema = Joi.object({
   eligiblePrograms: Joi.array().items(Joi.string().trim()).optional()
 });
 
+
 const updateJobSchema = Joi.object({
   title: Joi.string().trim(),
   description: Joi.string().trim(),
@@ -81,9 +82,9 @@ const shortlistStudentsSchema = Joi.object({
 /**
  * @route   POST /api/v1/jobs
  * @desc    Create new job posting
- * @access  Private (Coordinators only)
+ * @access  Private (Coordinators and Admins only)
  */
-router.post('/', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.post('/', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     // Validate request body
     const { error, value } = createJobSchema.validate(req.body);
@@ -159,6 +160,12 @@ router.get('/', authenticate, async (req, res, next) => {
 
     // Build query
     const query = {};
+
+    if (req.query.isActive !== undefined) {
+      query.isActive = String(req.query.isActive).toLowerCase() === 'true';
+    } else {
+      query.isActive = true;
+    }
     
     if (status) query.status = status;
     if (jobType) query.jobType = jobType;
@@ -178,6 +185,10 @@ router.get('/', authenticate, async (req, res, next) => {
       ];
     }
 
+    if (req.user.role === 'coordinator') {
+      query.coordinatorId = req.user._id;
+    }
+
     // For students, only show jobs they're eligible for
     if (req.user.role === 'student') {
       const studentProfile = await StudentProfile.findOne({ userId: req.user._id });
@@ -187,11 +198,21 @@ router.get('/', authenticate, async (req, res, next) => {
         
         // Filter by batch and program if specified in job
         if (studentProfile.batch) {
-          query.$or = [
+          const batchClause = [
             { eligibleBatches: { $in: [studentProfile.batch] } },
             { eligibleBatches: { $size: 0 } },
             { eligibleBatches: { $exists: false } }
           ];
+
+          if (query.$or) {
+            query.$and = Array.isArray(query.$and) ? query.$and : [];
+            query.$and.push({ $or: query.$or }, { $or: batchClause });
+            delete query.$or;
+          } else if (Array.isArray(query.$and)) {
+            query.$and.push({ $or: batchClause });
+          } else {
+            query.$or = batchClause;
+          }
         }
       }
     }
@@ -263,6 +284,13 @@ router.get('/:id', authenticate, async (req, res, next) => {
 
     let jobData = job.toObject();
 
+    if (req.user.role === 'coordinator' && job.coordinatorId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only view your own job postings'
+      });
+    }
+
     // For students, calculate match score and check application status
     if (req.user.role === 'student') {
       const studentProfile = await StudentProfile.findOne({ userId: req.user._id }).lean();
@@ -303,7 +331,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
  * @desc    Update job posting
  * @access  Private (Coordinators only)
  */
-router.put('/:id', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.put('/:id', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     // Validate request body
     const { error, value } = updateJobSchema.validate(req.body);
@@ -324,7 +352,7 @@ router.put('/:id', authenticate, authorize(['coordinator']), async (req, res, ne
     }
 
     // Check ownership
-    if (job.coordinatorId.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You can only update your own job postings'
@@ -350,7 +378,7 @@ router.put('/:id', authenticate, authorize(['coordinator']), async (req, res, ne
  * @desc    Get ranked list of candidate students for job
  * @access  Private (Coordinators only)
  */
-router.get('/:id/matches', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.get('/:id/matches', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     const {
       limit = 50,
@@ -359,6 +387,21 @@ router.get('/:id/matches', authenticate, authorize(['coordinator']), async (req,
       testWeight = 0.25,
       trainerWeight = 0.15
     } = req.query;
+
+    const job = await JobPosting.findById(req.params.id).select('coordinatorId');
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only manage your own job postings'
+      });
+    }
 
     const weights = {
       skills: parseFloat(skillWeight),
@@ -390,7 +433,7 @@ router.get('/:id/matches', authenticate, authorize(['coordinator']), async (req,
  * @desc    Shortlist selected students for job
  * @access  Private (Coordinators only)
  */
-router.post('/:id/shortlist', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.post('/:id/shortlist', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     // Validate request body
     const { error, value } = shortlistStudentsSchema.validate(req.body);
@@ -411,7 +454,7 @@ router.post('/:id/shortlist', authenticate, authorize(['coordinator']), async (r
     }
 
     // Check ownership
-    if (job.coordinatorId.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You can only manage your own job postings'
@@ -419,7 +462,7 @@ router.post('/:id/shortlist', authenticate, authorize(['coordinator']), async (r
     }
 
     // Update applicant statuses
-    const shortlistedCount = 0;
+    let shortlistedCount = 0;
     for (const studentId of value.studentIds) {
       const application = job.applicants.find(
         app => app.studentId.toString() === studentId
@@ -471,7 +514,7 @@ router.post('/:id/shortlist', authenticate, authorize(['coordinator']), async (r
  * @desc    Close job posting
  * @access  Private (Coordinators only)
  */
-router.put('/:id/close', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.put('/:id/close', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
     const job = await JobPosting.findById(req.params.id);
     if (!job) {
@@ -482,7 +525,7 @@ router.put('/:id/close', authenticate, authorize(['coordinator']), async (req, r
     }
 
     // Check ownership
-    if (job.coordinatorId.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You can only manage your own job postings'
@@ -495,6 +538,37 @@ router.put('/:id/close', authenticate, authorize(['coordinator']), async (req, r
     res.json({
       success: true,
       message: 'Job closed successfully',
+      data: job
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
+  try {
+    const job = await JobPosting.findById(req.params.id);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only manage your own job postings'
+      });
+    }
+
+    job.isActive = false;
+    job.status = 'closed';
+    await job.save();
+
+    res.json({
+      success: true,
+      message: 'Job deleted successfully',
       data: job
     });
   } catch (error) {
@@ -587,8 +661,23 @@ router.post('/:id/apply', authenticate, authorize(['student']), async (req, res,
  * @desc    Get detailed explanation of match score
  * @access  Private (Coordinators only)
  */
-router.get('/:jobId/explain/:studentId', authenticate, authorize(['coordinator']), async (req, res, next) => {
+router.get('/:jobId/explain/:studentId', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
   try {
+    const job = await JobPosting.findById(req.params.jobId).select('coordinatorId');
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only manage your own job postings'
+      });
+    }
+
     const explanation = await matchingService.explainMatchScore(
       req.params.studentId,
       req.params.jobId
