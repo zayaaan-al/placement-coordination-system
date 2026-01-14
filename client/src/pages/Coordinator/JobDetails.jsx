@@ -4,6 +4,21 @@ import { FiArrowLeft, FiEdit2, FiTrash2, FiXCircle, FiUsers, FiInfo } from 'reac
 import toast from 'react-hot-toast'
 import { jobsAPI } from '../../services/api'
 
+const placementBadge = (status) => {
+  if (status === 'placed') return 'bg-blue-50 text-blue-700 border-blue-200'
+  if (status === 'removed') return 'bg-red-50 text-red-700 border-red-200'
+  if (status === 'approved') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (status === 'pending' || status === 'not_approved') return 'bg-amber-50 text-amber-700 border-amber-200'
+  return 'bg-gray-50 text-gray-700 border-gray-200'
+}
+
+const appBadge = (status) => {
+  if (status === 'selected') return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  if (status === 'shortlisted') return 'bg-blue-50 text-blue-700 border-blue-200'
+  if (status === 'rejected') return 'bg-red-50 text-red-700 border-red-200'
+  return 'bg-gray-50 text-gray-700 border-gray-200'
+}
+
 const statusBadge = (status) => {
   if (status === 'open') return 'bg-green-50 text-green-700 border-green-200'
   if (status === 'closed') return 'bg-gray-50 text-gray-700 border-gray-200'
@@ -35,6 +50,10 @@ const JobDetails = () => {
   const [closing, setClosing] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
 
+  const [applications, setApplications] = React.useState([])
+  const [applicationsLoading, setApplicationsLoading] = React.useState(false)
+  const [updatingAppId, setUpdatingAppId] = React.useState(null)
+
   const load = React.useCallback(async () => {
     try {
       setLoading(true)
@@ -56,6 +75,48 @@ const JobDetails = () => {
   React.useEffect(() => {
     load()
   }, [load])
+
+  const loadApplications = React.useCallback(async () => {
+    if (!jobId) return
+    try {
+      setApplicationsLoading(true)
+      const res = await jobsAPI.getJobApplications(jobId)
+      if (res?.data?.success) {
+        setApplications(res.data.data?.applications || [])
+      } else {
+        setApplications([])
+      }
+    } catch (e) {
+      setApplications([])
+    } finally {
+      setApplicationsLoading(false)
+    }
+  }, [jobId])
+
+  React.useEffect(() => {
+    if (activeTab === 'applicants') {
+      loadApplications()
+    }
+  }, [activeTab, loadApplications])
+
+  const updateApplicationStatus = async (applicationId, status) => {
+    if (!jobId || !applicationId) return
+    try {
+      setUpdatingAppId(applicationId)
+      const res = await jobsAPI.updateJobApplication(jobId, applicationId, { status })
+      if (res?.data?.success) {
+        toast.success('Application updated')
+        await loadApplications()
+        await load()
+      } else {
+        toast.error('Failed to update application')
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'Failed to update application')
+    } finally {
+      setUpdatingAppId(null)
+    }
+  }
 
   const onCloseJob = async () => {
     if (!job?._id) return
@@ -126,7 +187,7 @@ const JobDetails = () => {
     )
   }
 
-  const applicants = Array.isArray(job.applicants) ? job.applicants : []
+  const legacyApplicants = Array.isArray(job.applicants) ? job.applicants : []
 
   return (
     <div className="space-y-6">
@@ -211,7 +272,7 @@ const JobDetails = () => {
               onClick={() => setActiveTab('applicants')}
             >
               <FiUsers className="mr-2" />
-              Applicants ({applicants.length})
+              Applicants ({applications.length || legacyApplicants.length})
             </button>
             <button
               className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center ${
@@ -320,7 +381,86 @@ const JobDetails = () => {
 
           {activeTab === 'applicants' && (
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              {applicants.length > 0 ? (
+              {applicationsLoading ? (
+                <div className="flex justify-center items-center h-40">
+                  <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500" />
+                </div>
+              ) : applications.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Roll No</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Program</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Aggregate</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Placement</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Application</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Applied On</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {applications.map((a, idx) => {
+                        const user = a?.studentId
+                        const profile = a?.studentProfileId
+                        const name = `${user?.name?.first || ''} ${user?.name?.last || ''}`.trim() || '—'
+                        const placement = profile?.placementStatus || '—'
+                        const applicationStatus = a?.status || '—'
+                        const isBusy = updatingAppId === a?._id
+                        const actionsDisabled = placement === 'placed' || placement === 'removed'
+                        return (
+                          <tr key={a?._id || `${user?._id || 'app'}-${idx}`} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user?.email || '—'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{profile?.rollNo || '—'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{profile?.program || '—'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{typeof profile?.aggregateScore === 'number' ? `${profile.aggregateScore}%` : '—'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${placementBadge(placement)}`}>
+                                {placement}
+                              </span>
+                            </td>
+
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${appBadge(applicationStatus)}`}>
+                                {applicationStatus}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(a?.appliedAt || a?.createdAt)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => updateApplicationStatus(a._id, 'shortlisted')}
+                                  disabled={isBusy || actionsDisabled || applicationStatus === 'selected'}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Shortlist
+                                </button>
+                                <button
+                                  onClick={() => updateApplicationStatus(a._id, 'rejected')}
+                                  disabled={isBusy || actionsDisabled || applicationStatus === 'selected'}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  onClick={() => updateApplicationStatus(a._id, 'selected')}
+                                  disabled={isBusy || actionsDisabled || applicationStatus === 'selected'}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Select
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : legacyApplicants.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -333,7 +473,7 @@ const JobDetails = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
-                      {applicants.map((a, idx) => {
+                      {legacyApplicants.map((a, idx) => {
                         const user = a?.studentId
                         const name = `${user?.name?.first || ''} ${user?.name?.last || ''}`.trim() || '—'
                         return (

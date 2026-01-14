@@ -2,6 +2,7 @@ const express = require('express');
 const Joi = require('joi');
 const JobPosting = require('../models/JobPosting');
 const StudentProfile = require('../models/StudentProfile');
+const JobApplication = require('../models/JobApplication');
 const Notification = require('../models/Notification');
 const matchingService = require('../services/matchingService');
 const { authenticate, authorize } = require('../middleware/auth');
@@ -39,6 +40,134 @@ const createJobSchema = Joi.object({
   deadline: Joi.date().min('now').required(),
   eligibleBatches: Joi.array().items(Joi.string().trim()).optional(),
   eligiblePrograms: Joi.array().items(Joi.string().trim()).optional()
+});
+
+const updateJobApplicationSchema = Joi.object({
+  status: Joi.string().valid('shortlisted', 'rejected', 'selected').required(),
+  remarks: Joi.string().trim().allow('', null).optional()
+});
+
+router.get('/:id/applications', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
+  try {
+    const job = await JobPosting.findById(req.params.id).select('coordinatorId');
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only manage your own job postings'
+      });
+    }
+
+    const applications = await JobApplication.find({ jobId: job._id })
+      .populate('studentId', 'name email')
+      .populate('studentProfileId', 'rollNo program batch aggregateScore placementStatus')
+      .sort({ appliedAt: -1, createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        jobId: job._id,
+        applications
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/:id/applications/:applicationId', authenticate, authorize(['coordinator', 'admin']), async (req, res, next) => {
+  try {
+    const { error, value } = updateJobApplicationSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        details: error.details.map(detail => detail.message)
+      });
+    }
+
+    const job = await JobPosting.findById(req.params.id);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    if (req.user.role !== 'admin' && job.coordinatorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only manage your own job postings'
+      });
+    }
+
+    const application = await JobApplication.findOne({ _id: req.params.applicationId, jobId: job._id });
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        error: 'Application not found'
+      });
+    }
+
+    if (value.status === 'selected') {
+      const studentProfile = await StudentProfile.findById(application.studentProfileId);
+      if (!studentProfile) {
+        return res.status(404).json({
+          success: false,
+          error: 'Student profile not found'
+        });
+      }
+
+      if (studentProfile.placementStatus !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          error: 'Only approved students can be selected'
+        });
+      }
+
+      studentProfile.placementStatus = 'placed';
+      studentProfile.placementEligible = true;
+      studentProfile.placementReviewedAt = new Date();
+      await studentProfile.save();
+    }
+
+    application.status = value.status;
+    application.reviewedAt = new Date();
+    if (value.remarks !== undefined) {
+      application.remarks = value.remarks;
+    }
+    await application.save();
+
+    const legacyApplicant = job.applicants.find(
+      (a) => a.studentId.toString() === application.studentId.toString()
+    );
+
+    if (legacyApplicant) {
+      legacyApplicant.status = value.status;
+    } else {
+      job.applicants.push({
+        studentId: application.studentId,
+        status: value.status,
+        appliedDate: application.appliedAt || new Date()
+      });
+    }
+
+    await job.save();
+
+    res.json({
+      success: true,
+      message: 'Application updated successfully',
+      data: application
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 
@@ -193,6 +322,13 @@ router.get('/', authenticate, async (req, res, next) => {
     if (req.user.role === 'student') {
       const studentProfile = await StudentProfile.findOne({ userId: req.user._id });
       if (studentProfile) {
+        if (studentProfile.placementStatus !== 'approved') {
+          return res.status(403).json({
+            success: false,
+            error: 'You are not eligible for placement opportunities yet'
+          });
+        }
+
         // Filter by aggregate score
         query.minAggregateScore = { $lte: studentProfile.aggregateScore };
         
@@ -284,7 +420,8 @@ router.get('/:id', authenticate, async (req, res, next) => {
 
     let jobData = job.toObject();
 
-    if (req.user.role === 'coordinator' && job.coordinatorId?.toString() !== req.user._id.toString()) {
+    const jobCoordinatorId = (job.coordinatorId && job.coordinatorId._id) ? job.coordinatorId._id : job.coordinatorId;
+    if (req.user.role === 'coordinator' && jobCoordinatorId?.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         error: 'You can only view your own job postings'
@@ -295,6 +432,13 @@ router.get('/:id', authenticate, async (req, res, next) => {
     if (req.user.role === 'student') {
       const studentProfile = await StudentProfile.findOne({ userId: req.user._id }).lean();
       if (studentProfile) {
+        if (studentProfile.placementStatus !== 'approved') {
+          return res.status(403).json({
+            success: false,
+            error: 'You are not eligible for placement opportunities yet'
+          });
+        }
+
         const matchResult = matchingService.calculateMatchScore(
           studentProfile, 
           job, 
@@ -480,6 +624,12 @@ router.post('/:id/shortlist', authenticate, authorize(['coordinator', 'admin']),
         });
       }
 
+      await JobApplication.findOneAndUpdate(
+        { jobId: job._id, studentId },
+        { status: 'shortlisted', reviewedAt: new Date(), ...(value.remarks ? { remarks: value.remarks } : {}) },
+        { new: true }
+      );
+
       // Send notification to student
       await Notification.createNotification({
         userId: studentId,
@@ -619,10 +769,10 @@ router.post('/:id/apply', authenticate, authorize(['student']), async (req, res,
       });
     }
 
-    if (!studentProfile.placementEligible) {
+    if (studentProfile.placementStatus !== 'approved') {
       return res.status(400).json({
         success: false,
-        error: 'You are not eligible for placement'
+        error: 'You are not eligible for placement opportunities yet'
       });
     }
 
@@ -641,6 +791,25 @@ router.post('/:id/apply', authenticate, authorize(['student']), async (req, res,
     );
 
     // Add application
+    try {
+      await JobApplication.create({
+        jobId: job._id,
+        studentId: req.user._id,
+        studentProfileId: studentProfile._id,
+        status: 'applied',
+        appliedAt: new Date(),
+      });
+    } catch (e) {
+      if (e && e.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          error: 'You have already applied for this job'
+        });
+      }
+      throw e;
+    }
+
+    // Keep legacy applicants array in sync for existing coordinator dashboards
     await job.addApplicant(req.user._id, matchResult.totalScore);
 
     res.json({

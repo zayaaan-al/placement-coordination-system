@@ -1,5 +1,6 @@
 const express = require('express');
 const Joi = require('joi');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
 const { authenticate, authorize, checkOwnership } = require('../middleware/auth');
@@ -162,6 +163,13 @@ router.put('/me/student-profile', authenticate, authorize(['student']), async (r
  */
 router.get('/id/:id', authenticate, authorize(['trainer', 'coordinator']), async (req, res, next) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user id'
+      });
+    }
+
     const user = await User.findById(req.params.id).select('-passwordHash -refreshTokens');
     if (!user) {
       return res.status(404).json({

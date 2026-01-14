@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 
 // Create axios instance
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api/v1' : '/api/v1'),
   timeout: 10000,
 })
 
@@ -105,10 +105,19 @@ export const jobsAPI = {
   updateJob: (id, data) => api.put(`/jobs/${id}`, data),
   getMatches: (id, params) => api.get(`/jobs/${id}/matches`, { params }),
   shortlistStudents: (id, data) => api.post(`/jobs/${id}/shortlist`, data),
+  getJobApplications: (id) => api.get(`/jobs/${id}/applications`),
+  updateJobApplication: (jobId, applicationId, data) => api.put(`/jobs/${jobId}/applications/${applicationId}`, data),
   closeJob: (id) => api.put(`/jobs/${id}/close`),
   deleteJob: (id) => api.delete(`/jobs/${id}`),
   applyForJob: (id) => api.post(`/jobs/${id}/apply`),
   explainMatch: (jobId, studentId) => api.get(`/jobs/${jobId}/explain/${studentId}`),
+}
+
+// Student Placement Jobs API
+export const studentJobsAPI = {
+  getPlacementJobs: (params) => api.get('/student/jobs', { params }),
+  getPlacementJobById: (id) => api.get(`/student/jobs/${id}`),
+  applyToPlacementJob: (id) => api.post(`/student/jobs/${id}/apply`),
 }
 
 // Trainers API

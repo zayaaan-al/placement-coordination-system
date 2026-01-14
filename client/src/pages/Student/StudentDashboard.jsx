@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { usersAPI, jobsAPI, notificationsAPI, studentsAPI } from '../../services/api'
+import { usersAPI, jobsAPI, notificationsAPI, studentsAPI, studentJobsAPI } from '../../services/api'
 import {
   AcademicCapIcon,
   BriefcaseIcon,
@@ -19,6 +19,7 @@ const StudentDashboard = () => {
   const [performance, setPerformance] = useState(null)
   const [performanceLastUpdated, setPerformanceLastUpdated] = useState(null)
   const [jobMatches, setJobMatches] = useState([])
+  const [placementOpenJobsCount, setPlacementOpenJobsCount] = useState(null)
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -111,10 +112,9 @@ const StudentDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [profileRes, perfRes, jobsRes, notificationsRes] = await Promise.all([
+      const [profileRes, perfRes, notificationsRes] = await Promise.all([
         usersAPI.getProfile(),
         studentsAPI.getMyPerformance(),
-        jobsAPI.getJobs({ limit: 5 }),
         notificationsAPI.getRecent()
       ])
 
@@ -129,8 +129,24 @@ const StudentDashboard = () => {
         }
       }
 
-      if (jobsRes.data.success) {
-        setJobMatches(jobsRes.data.data.jobs)
+      const placementStatus = profileRes?.data?.data?.studentProfile?.placementStatus
+      if (placementStatus === 'approved') {
+        try {
+          const placementRes = await studentJobsAPI.getPlacementJobs({ limit: 5, page: 1 })
+          if (placementRes?.data?.success) {
+            setPlacementOpenJobsCount(placementRes.data.data?.pagination?.total ?? 0)
+            setJobMatches(placementRes.data.data?.jobs || [])
+          } else {
+            setPlacementOpenJobsCount(0)
+            setJobMatches([])
+          }
+        } catch (e) {
+          setPlacementOpenJobsCount(null)
+          setJobMatches([])
+        }
+      } else {
+        setPlacementOpenJobsCount(null)
+        setJobMatches([])
       }
 
       if (notificationsRes.data.success) {
@@ -196,6 +212,9 @@ const StudentDashboard = () => {
     }
     return texts[status] || status
   }
+
+  const placementStatus = studentProfile?.placementStatus
+  const canViewPlacementJobs = placementStatus === 'approved'
 
   return (
     <div className="space-y-6">
@@ -266,6 +285,38 @@ const StudentDashboard = () => {
               <p className="text-2xl font-semibold text-gray-900">
                 {jobMatches.length}
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <BriefcaseIcon className="h-6 w-6 sm:h-8 sm:w-8 text-primary-600" />
+            </div>
+            <div className="ml-3 sm:ml-4 min-w-0 flex-1">
+              <p className="text-xs sm:text-sm font-medium text-gray-500 truncate">Placement Jobs</p>
+              {canViewPlacementJobs ? (
+                <>
+                  <p className="text-xl sm:text-2xl font-semibold text-gray-900">
+                    {typeof placementOpenJobsCount === 'number' ? placementOpenJobsCount : '—'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Open jobs</p>
+                  <Link
+                    to="/student/jobs"
+                    className="mt-1 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-500"
+                  >
+                    View Jobs
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-900">Locked</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Placement access will be enabled once approved.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -368,7 +419,7 @@ const StudentDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">Recent Job Matches</h3>
-            <Link to="/jobs" className="text-primary-600 hover:text-primary-500 text-sm font-medium">
+            <Link to="/student/jobs" className="text-primary-600 hover:text-primary-500 text-sm font-medium">
               View all
             </Link>
           </div>
@@ -392,7 +443,7 @@ const StudentDashboard = () => {
                     </div>
                     <div className="ml-4 flex-shrink-0">
                       <Link
-                        to={`/jobs/${job._id}`}
+                        to={`/student/jobs/${job._id}`}
                         className="btn-primary text-xs px-3 py-1"
                       >
                         View

@@ -102,13 +102,20 @@ class MatchingService {
   calculateMatchScore(student, job, weights, includeExplanation = false) {
     const explanation = {};
 
+    const studentSkills = Array.isArray(student?.skills) ? student.skills : [];
+    const jobSkills = Array.isArray(job?.requiredSkills) ? job.requiredSkills : [];
+
     // 1. Skill Matching Score
-    const skillScore = this.calculateSkillMatchScore(student, job.requiredSkills);
+    const skillScore = (studentSkills.length === 0 || jobSkills.length === 0)
+      ? 0
+      : this.calculateSkillMatchScore(studentSkills, jobSkills);
     explanation.skillScore = {
       score: skillScore,
       weight: weights.skills,
       contribution: skillScore * weights.skills,
-      details: this.getSkillMatchDetails(student, job.requiredSkills)
+      details: (studentSkills.length === 0 || jobSkills.length === 0)
+        ? { matched: [], missing: jobSkills, additional: [] }
+        : this.getSkillMatchDetails(studentSkills, jobSkills)
     };
 
     // 2. Test Performance Score
@@ -175,14 +182,9 @@ class MatchingService {
    * @param {Array} requiredSkills - Job required skills
    * @returns {number} Skill match score (0-100)
    */
-  calculateSkillMatchScore(student, requiredSkills) {
-    if (!requiredSkills || requiredSkills.length === 0) {
-      return 100; // No specific skills required
-    }
-
-    if (!student.skills || student.skills.length === 0) {
-      return 0; // Student has no skills listed
-    }
+  calculateSkillMatchScore(studentSkills, requiredSkills) {
+    if (!requiredSkills || requiredSkills.length === 0) return 0;
+    if (!studentSkills || studentSkills.length === 0) return 0;
 
     let totalWeight = 0;
     let matchedWeight = 0;
@@ -190,7 +192,7 @@ class MatchingService {
     for (const requiredSkill of requiredSkills) {
       totalWeight += 1;
       
-      const studentSkill = student.skills.find(
+      const studentSkill = studentSkills.find(
         skill => skill.name.toLowerCase() === requiredSkill.name.toLowerCase()
       );
 
@@ -211,17 +213,22 @@ class MatchingService {
    * @param {Array} requiredSkills - Job required skills
    * @returns {Object} Skill match details
    */
-  getSkillMatchDetails(student, requiredSkills) {
+  getSkillMatchDetails(studentSkills, requiredSkills) {
     const details = {
       matched: [],
       missing: [],
       additional: []
     };
 
+    if (!Array.isArray(requiredSkills) || requiredSkills.length === 0) {
+      return details;
+    }
+
+    const safeStudentSkills = Array.isArray(studentSkills) ? studentSkills : [];
     const requiredSkillNames = requiredSkills.map(skill => skill.name.toLowerCase());
 
     for (const requiredSkill of requiredSkills) {
-      const studentSkill = student.skills.find(
+      const studentSkill = safeStudentSkills.find(
         skill => skill.name.toLowerCase() === requiredSkill.name.toLowerCase()
       );
 
@@ -241,7 +248,7 @@ class MatchingService {
     }
 
     // Find additional skills student has
-    for (const studentSkill of student.skills || []) {
+    for (const studentSkill of safeStudentSkills) {
       if (!requiredSkillNames.includes(studentSkill.name.toLowerCase())) {
         details.additional.push({
           name: studentSkill.name,

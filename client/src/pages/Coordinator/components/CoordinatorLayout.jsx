@@ -10,12 +10,12 @@ import {
 } from 'react-icons/fi';
 
 const menuItems = [
-  { name: 'Dashboard', icon: <FiHome />, path: '.', end: true },
-  { name: 'Student Management', icon: <FiUsers />, path: 'student-management' },
-  { name: 'Trainers', icon: <FiUsers />, path: 'trainers' },
-  { name: 'Job Management', icon: <FiBriefcase />, path: 'job-management' },
-  { name: 'Placement Requests', icon: <FiCheckCircle />, path: 'placement-requests' },
-  { name: 'Trainer Approvals', icon: <FiCheckCircle />, path: 'approvals' },
+  { name: 'Dashboard', icon: <FiHome />, path: '/dashboard', end: true },
+  { name: 'Student Management', icon: <FiUsers />, path: '/dashboard/student-management' },
+  { name: 'Trainers', icon: <FiUsers />, path: '/dashboard/trainers' },
+  { name: 'Job Management', icon: <FiBriefcase />, path: '/dashboard/job-management' },
+  { name: 'Placement Requests', icon: <FiCheckCircle />, path: '/dashboard/placement-requests' },
+  { name: 'Trainer Approvals', icon: <FiCheckCircle />, path: '/dashboard/approvals' },
 ];
 
 export default function CoordinatorLayout({ children }) {

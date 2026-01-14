@@ -14,8 +14,8 @@ import RegisterPage from './pages/Auth/RegisterPage'
 import StudentDashboard from './pages/Student/StudentDashboard'
 import StudentProfile from './pages/Student/StudentProfile'
 import MyPerformance from './pages/Student/MyPerformance'
-import JobMatches from './pages/Student/JobMatches'
-import JobDetails from './pages/Student/JobDetails'
+import PlacementJobs from './pages/Student/PlacementJobs'
+import PlacementJobDetails from './pages/Student/PlacementJobDetails'
 
 // Trainer pages
 import TrainerDashboard from './pages/Trainer/TrainerDashboard'
@@ -74,12 +74,23 @@ function App() {
           } />
           <Route path="jobs" element={
             <ProtectedRoute allowedRoles={['student']}>
-              <JobMatches />
+              <Navigate to="/student/jobs" replace />
             </ProtectedRoute>
           } />
           <Route path="jobs/:id" element={
             <ProtectedRoute allowedRoles={['student']}>
-              <JobDetails />
+              <Navigate to="/student/jobs/:id" replace />
+            </ProtectedRoute>
+          } />
+
+          <Route path="student/jobs" element={
+            <ProtectedRoute allowedRoles={['student']}>
+              <PlacementJobs />
+            </ProtectedRoute>
+          } />
+          <Route path="student/jobs/:id" element={
+            <ProtectedRoute allowedRoles={['student']}>
+              <PlacementJobDetails />
             </ProtectedRoute>
           } />
 
