@@ -15,7 +15,7 @@ const menuItems = [
   { name: 'Trainers', icon: <FiUsers />, path: 'trainers' },
   { name: 'Job Management', icon: <FiBriefcase />, path: 'job-management' },
   { name: 'Placement Requests', icon: <FiCheckCircle />, path: 'placement-requests' },
-  { name: 'Approvals', icon: <FiCheckCircle />, path: 'approvals' },
+  { name: 'Trainer Approvals', icon: <FiCheckCircle />, path: 'approvals' },
 ];
 
 export default function CoordinatorLayout({ children }) {
