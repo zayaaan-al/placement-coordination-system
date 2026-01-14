@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { notificationsAPI } from '../../services/api'
 import {
   Bars3Icon,
-  BellIcon,
   ChevronDownIcon,
   UserIcon,
   CogIcon,
@@ -15,22 +13,6 @@ import clsx from 'clsx'
 
 const Header = ({ setSidebarOpen }) => {
   const { user, logout } = useAuth()
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  useEffect(() => {
-    fetchUnreadCount()
-  }, [])
-
-  const fetchUnreadCount = async () => {
-    try {
-      const response = await notificationsAPI.getUnreadCount()
-      if (response.data.success) {
-        setUnreadCount(response.data.data.unreadCount)
-      }
-    } catch (error) {
-      console.error('Error fetching unread count:', error)
-    }
-  }
 
   const handleLogout = async () => {
     await logout()
@@ -61,19 +43,6 @@ const Header = ({ setSidebarOpen }) => {
 
           {/* Right side */}
           <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Notifications */}
-            <Link
-              to="/notifications"
-              className="relative p-1.5 sm:p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-full transition-colors"
-            >
-              <BellIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-4 w-4 sm:h-5 sm:w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </Link>
-
             {/* Profile dropdown */}
             <Menu as="div" className="relative">
               <Menu.Button className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all">

@@ -8,8 +8,6 @@ import {
   UserGroupIcon,
   ChartBarIcon,
   DocumentTextIcon,
-  BellIcon,
-  CogIcon,
   AcademicCapIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline'
@@ -22,7 +20,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
   const getNavigationItems = () => {
     const commonItems = [
       { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-      { name: 'Notifications', href: '/notifications', icon: BellIcon },
     ]
 
     const roleSpecificItems = {
@@ -37,10 +34,10 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }) => {
         { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
       ],
       coordinator: [
-        { name: 'Reports', href: '/reports', icon: DocumentTextIcon },
+        
       ],
       admin: [
-        { name: 'Reports', href: '/reports', icon: DocumentTextIcon },
+        
       ]
     }
 

@@ -415,9 +415,6 @@ const StudentDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">Recent Notifications</h3>
-            <Link to="/notifications" className="text-primary-600 hover:text-primary-500 text-sm font-medium">
-              View all
-            </Link>
           </div>
           
           {notifications.length > 0 ? (

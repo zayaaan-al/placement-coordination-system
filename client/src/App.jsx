@@ -27,10 +27,8 @@ import TrainerEvaluation from './pages/Trainer/TrainerEvaluation'
 // Coordinator pages
 import CoordinatorDashboard from './pages/Coordinator/CoordinatorDashboard'
 import CreateJob from './pages/Coordinator/CreateJob'
-import Reports from './pages/Coordinator/Reports'
 
 // Shared pages
-import NotificationsPage from './pages/NotificationsPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -123,9 +121,7 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="reports" element={
-            <ProtectedRoute allowedRoles={['coordinator']}>
-              <Reports />
-            </ProtectedRoute>
+            <Navigate to="/dashboard" replace />
           } />
 
           <Route path="placement-requests" element={
@@ -135,7 +131,7 @@ function App() {
           } />
 
           {/* Shared routes */}
-          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="notifications" element={<Navigate to="/dashboard" replace />} />
         </Route>
 
         {/* 404 page */}

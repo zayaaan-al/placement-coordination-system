@@ -1,10 +1,26 @@
 import React, { useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import { useAuth } from '../../contexts/AuthContext'
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
+  const { user } = useAuth()
+
+  const isCoordinatorDashboard =
+    (user?.role === 'coordinator' || user?.role === 'admin') &&
+    location.pathname.startsWith('/dashboard')
+
+  if (isCoordinatorDashboard) {
+    return (
+      <div className="h-screen bg-gray-50">
+        <Outlet />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">

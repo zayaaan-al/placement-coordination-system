@@ -84,7 +84,7 @@ const DashboardHome = () => {
       
       <DashboardStats stats={stats} loading={loading} error={error} />
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         <UpcomingPlacements
           loading={loading}
           items={upcomingPlacements}
@@ -93,7 +93,7 @@ const DashboardHome = () => {
         <RecentActivities
           loading={loading}
           items={recentActivities}
-          onViewAll={() => navigate('/notifications')}
+          onViewAll={() => {}}
         />
       </div>
     </div>

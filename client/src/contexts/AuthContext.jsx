@@ -134,7 +134,7 @@ export function AuthProvider({ children }) {
         if (userData.role === 'trainer') {
           toast.success('Registered successfully. Please wait for admin approval.')
         } else {
-          toast.success('Your account has been created. Please log in to continue.')
+          toast.success('Registered successfully. Please wait for admin approval.')
         }
         return { success: true }
       } else {
