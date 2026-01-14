@@ -60,6 +60,8 @@ function App() {
             <Navigate to="/login" replace />
           } />
 
+          <Route path="settings" element={<Navigate to="/dashboard" replace />} />
+
           {/* Student routes */}
           <Route path="profile" element={
             <ProtectedRoute allowedRoles={['student']}>
